@@ -1,24 +1,21 @@
 import os
-import base64
 import httpx
 import json
+import base64
 import pytest
 from typing import Dict, Any
 from dotenv import load_dotenv
-# from cryptography.hazmat.primitives import serialization
-# from cryptography.hazmat.primitives.asymmetric import ed25519
+load_dotenv()
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-
-load_dotenv()
 BASE_URL = "http://localhost:8000"
+#BASE_URL = "https://verified.bitrecs.ai"
+
 HOTKEY = os.environ.get("HOTKEY")
 OPENROUTER_KEY = os.environ.get("OPENROUTER_KEY")
 
 async def get_public_key() -> Ed25519PublicKey:
-    """Get public key from proxy server."""
-    #self.proxy_key : bytes = get_proxy_public_key(self.proxy_url)
-    #self.public_key = Ed25519PublicKey.from_public_bytes(self.proxy_key)
+    """Get public key from proxy server."""    
     async with httpx.AsyncClient(timeout=30.0) as client:
         public_key_response = await client.get(f"{BASE_URL}/public_key")
         public_key_response.raise_for_status()
@@ -36,7 +33,7 @@ async def call_proxy_server(
     headers = {
         "Authorization": f"Bearer {openrouter_key}",
         "x-hotkey": hotkey,
-        "x-provider": "OPENROUTER"
+        "x-provider": "OPEN_ROUTER"
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
@@ -80,23 +77,9 @@ async def test_verify_signature():
 
     # Returns a SignedResponse object with openrouter package, proof, signature
     response = await call_proxy_server(request, OPENROUTER_KEY, HOTKEY)
+    print(f"Response: {response}")
 
     assert verify_signature(response, public_key), "Signature verification failed"
 
 
-async def main():
-    public_key = await get_public_key()
 
-    request = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": "Hello, how are you?"}]
-    }
-
-    # Returns a SignedResponse object with openrouter package, proof, signature
-    response = await call_proxy_server(request, OPENROUTER_KEY, HOTKEY)
-
-    assert verify_signature(response, public_key), "Signature verification failed"
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())

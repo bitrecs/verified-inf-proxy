@@ -2,6 +2,7 @@ import os
 import gc
 import time
 import json
+import traceback
 import uuid
 import hashlib
 import base64
@@ -16,7 +17,7 @@ from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from typing import Union, Dict
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -24,15 +25,16 @@ from slowapi.errors import RateLimitExceeded
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives import serialization
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
 
 
 global metagraph
 metagraph_cache = None
 metagraph_cache_timestamp = None
 CACHE_DURATION = 300
-
-logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
-logger = logging.getLogger(__name__)
+BT_NETWORK = os.environ.get("BT_NETWORK", "test")
+BT_NETUID = int(os.environ.get("BT_NETUID", 296))
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
@@ -53,8 +55,8 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # TESTING KEY
-B64_PRIVATE_KEY = "u6Bi2YUBzVULp6PFBjG0b3GppyMW7Uw1FY4SW3wilLc="
-#B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
+#B64_PRIVATE_KEY = "u6Bi2YUBzVULp6PFBjG0b3GppyMW7Uw1FY4SW3wilLc="
+B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
 if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
@@ -129,9 +131,9 @@ async def forward_proxy_request(
     
     try:
         match x_provider:
-            case "OPENAI":
+            case "CHAT_GPT":
                 url = "https://api.openai.com/v1/chat/completions"
-            case "OPENROUTER":
+            case "OPEN_ROUTER":
                 url = "https://openrouter.ai/api/v1/chat/completions"
             case "GEMINI":
                 url = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -168,8 +170,8 @@ async def forward_proxy_request(
         }
 
         # Time metadata (NOT signed)
-        timestamp = datetime.utcnow().isoformat()
-        ttl = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        ttl = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
 
         # Sign only the core proof
         serialized_proof = json.dumps(proof, sort_keys=True).encode()
@@ -245,11 +247,11 @@ async def get_metagraph_data() -> dict:
         logger.info("Returning cached metagraph data")
         return metagraph_cache
 
-    try:
-        # network = "finney"
-        # netuid = 122
-        network = "test"
-        netuid = 296
+    try:        
+        network = BT_NETWORK
+        netuid = BT_NETUID
+        if not network or netuid is None:
+            raise ValueError("BT_NETWORK or BT_NETUID environment variables not set")
 
         logger.info(f'Fetching fresh metagraph data for {network}:{netuid}...')
         subnet = bt.metagraph(netuid=netuid, network=network)

@@ -36,7 +36,7 @@ async def test_call_proxy():
     }
     headers = {"Authorization": f"Bearer {OPENAI_KEY}",
                "x-hotkey": HOTKEY,
-               "x-provider": "OPENAI"}
+               "x-provider": "CHAT_GPT"}
 
     response = await call_proxy(request, headers)
     assert response is not None

@@ -36,7 +36,7 @@ async def test_call_proxy():
     }
     headers = {"Authorization": f"Bearer {GROQ_KEY}",
                "x-hotkey": HOTKEY,
-               "x-provider": "OPENROUTER"}
+               "x-provider": "OPEN_ROUTER"}
 
     response = await call_proxy(request, headers)
     assert response is not None
