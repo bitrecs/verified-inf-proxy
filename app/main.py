@@ -65,8 +65,8 @@ PUBLIC_KEY = PRIVATE_KEY.public_key()
 
 class ChatCompletionRequest(BaseModel):
     model: str
-    messages: list[dict]
-    input: list[dict]
+    messages: list[dict] | None = None  # For GPT
+    input: list[dict] | None = None  # For Gemini
     
     # Optional params
     temperature: float | None = None
