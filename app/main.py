@@ -66,6 +66,7 @@ PUBLIC_KEY = PRIVATE_KEY.public_key()
 class ChatCompletionRequest(BaseModel):
     model: str
     messages: list[dict]
+    input: list[dict]
     
     # Optional params
     temperature: float | None = None
@@ -136,6 +137,7 @@ async def forward_proxy_request(
         match x_provider:
             case "CHAT_GPT":
                 url = "https://api.openai.com/v1/chat/completions"
+                #url = "https://api.openai.com/v1/responses"
             case "OPEN_ROUTER":
                 url = "https://openrouter.ai/api/v1/chat/completions"
             case "GEMINI":
