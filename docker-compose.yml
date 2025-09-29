@@ -10,5 +10,3 @@ services:
       - LOG_LEVEL=DEBUG
       # - UVLOOP_DISABLED=1
       # - DISABLE_NEST_ASYNCIO=True
-    env_file:
-      - ./app/.env

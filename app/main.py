@@ -1,19 +1,19 @@
 import os
 import gc
+import time
 import json
 import uuid
 import hashlib
 import base64
-from fastapi.responses import JSONResponse
 import httpx
 import asyncio
 import logging
-import time
 import numpy as np
 from dotenv import load_dotenv
 load_dotenv()
 import bittensor as bt
 from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
 from typing import Union, Dict
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timedelta
@@ -27,11 +27,9 @@ from cryptography.hazmat.primitives import serialization
 
 
 global metagraph
-
-# Simple 5-minute cache for metagraph data
 metagraph_cache = None
 metagraph_cache_timestamp = None
-CACHE_DURATION = 300  # 5 minutes in seconds
+CACHE_DURATION = 300
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
@@ -54,24 +52,14 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
+# TESTING KEY
+B64_PRIVATE_KEY = "u6Bi2YUBzVULp6PFBjG0b3GppyMW7Uw1FY4SW3wilLc="
+#B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
 if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
-base64_key = base64.b64decode(B64_PRIVATE_KEY)
-PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64_key)
+PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
 
-#private_key_path = os.environ.get("PRIVATE_KEY_PATH")
-#public_key_path = os.environ.get("PUBLIC_KEY_PATH")
-
-# with open(private_key_path, "rb") as f:
-#     PRIVATE_SIGNING_KEY = serialization.load_pem_private_key(
-#         f.read(),
-#         password=None,
-#     )
-
-# with open(public_key_path, "rb") as f:
-#     PUBLIC_SIGNING_KEY = f.read()
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -103,10 +91,7 @@ class SignedResponse(BaseModel):
 async def health():
     node_count = len(metagraph['uids']) if metagraph else 0
     return {"status": "healthy", "nodes": node_count}
- 
-# @app.get("/public_key")
-# async def public_key(request: Request) -> Dict[str, str]:
-#     return {"public_key": PUBLIC_KEY.decode()}
+
 
 @app.get("/public_key")
 @limiter.limit("180/minute")
@@ -160,7 +145,7 @@ async def forward_proxy_request(
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
 
-        payload = completion_request.dict(exclude_unset=True)
+        payload =  completion_request.model_dump(exclude_unset=True)
 
         # Send the request to openai or openrouter
         response = await client.post(
