@@ -81,6 +81,9 @@ class ChatCompletionRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    text: dict | None = None  # For GPT5
+    reasoning: dict | None = None  # For GPT5
+
 class SignedResponse(BaseModel):
     response: dict
     proof: dict
@@ -147,7 +150,7 @@ async def forward_proxy_request(
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
 
-        payload =  completion_request.model_dump(exclude_unset=True)
+        payload = completion_request.model_dump(exclude_unset=True)
 
         # Send the request to openai or openrouter
         response = await client.post(

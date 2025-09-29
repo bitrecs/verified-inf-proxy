@@ -11,6 +11,7 @@ from app.main import SignedResponse
 
 load_dotenv()
 BASE_URL = "http://127.0.0.1:8000"
+#BASE_URL = "https//verified.bitrecs.ai"
 OPENAI_KEY = os.environ.get("OPENAI_KEY")
 HOTKEY = os.environ.get("HOTKEY")
 
@@ -32,6 +33,19 @@ async def call_proxy(
 async def test_call_proxy():
     request = {
         "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Hello, how are you?"}]
+    }
+    headers = {"Authorization": f"Bearer {OPENAI_KEY}",
+               "x-hotkey": HOTKEY,
+               "x-provider": "CHAT_GPT"}
+
+    response = await call_proxy(request, headers)
+    assert response is not None
+
+@pytest.mark.asyncio
+async def test_call_proxy_gpt5():
+    request = {
+        "model": "gpt-5-nano-2025-08-07",
         "messages": [{"role": "user", "content": "Hello, how are you?"}]
     }
     headers = {"Authorization": f"Bearer {OPENAI_KEY}",
