@@ -195,7 +195,7 @@ async def forward_proxy_request(
             case "OPEN_ROUTER":
                 url = "https://openrouter.ai/api/v1/chat/completions"
             case "GEMINI":
-                url = "https://generativelanguage.googleapis.com/v1beta/openai"
+                url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
             case "CHUTES":
                 url = "https://llm.chutes.ai/v1/chat/completions"
             case "GROQ":
