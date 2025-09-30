@@ -369,6 +369,7 @@ async def get_metagraph_data() -> dict:
         }
         
         logger.info(f'Successfully processed {total_neurons} neurons')
+        del subnet
         gc.collect()
 
         metagraph_result = {
