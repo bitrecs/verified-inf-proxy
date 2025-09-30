@@ -163,8 +163,11 @@ async def forward_proxy_request(
     try:
         match x_provider:
             case "CHAT_GPT":
-                url = "https://api.openai.com/v1/chat/completions"
-                #url = "https://api.openai.com/v1/responses"
+                # Check if it's GPT-5 family model
+                if completion_request.model.startswith("gpt-5"):
+                    url = "https://api.openai.com/v1/responses"
+                else:
+                    url = "https://api.openai.com/v1/chat/completions"
             case "OPEN_ROUTER":
                 url = "https://openrouter.ai/api/v1/chat/completions"
             case "GEMINI":

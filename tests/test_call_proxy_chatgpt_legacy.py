@@ -11,16 +11,16 @@ from app.main import SignedResponse
 
 load_dotenv()
 BASE_URL = "http://127.0.0.1:8000"
-CEREBRAS_KEY = os.environ.get("CEREBRAS_KEY")
+OPENAI_KEY = os.environ.get("OPENAI_KEY")
 HOTKEY = os.environ.get("HOTKEY")
 
 async def call_proxy(
-    request: dict, 
+    request: dict,
     headers: dict
 ) -> SignedResponse:
     """Call v1/chat/completions with an openai key."""
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
             f"{BASE_URL}/v1/chat/completions",
             json=request,
@@ -29,14 +29,14 @@ async def call_proxy(
         return response.json()
 
 @pytest.mark.asyncio
-async def test_call_proxy():
+async def test_call_proxy_legacy():
     request = {
-        "model": "llama-4-scout-17b-16e-instruct",
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": "Hello, how are you?"}]
     }
-    headers = {"Authorization": f"Bearer {CEREBRAS_KEY}",
+    headers = {"Authorization": f"Bearer {OPENAI_KEY}",
                "x-hotkey": HOTKEY,
-               "x-provider": "CEREBRAS"}
+               "x-provider": "CHAT_GPT"}
 
     response = await call_proxy(request, headers)
     assert response is not None

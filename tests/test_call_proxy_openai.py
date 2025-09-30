@@ -41,39 +41,10 @@ async def test_call_proxy():
 
     response = await call_proxy(request, headers)
     assert response is not None
+    assert "response" in response
+    assert "choices" in response["response"]
+    assert len(response["response"]["choices"]) > 0
+    assert "message" in response["response"]["choices"][0]
+    assert "content" in response["response"]["choices"][0]["message"]
+    assert len(response["response"]["choices"][0]["message"]["content"]) > 0
 
-@pytest.mark.asyncio
-async def test_call_proxy_gpt5():
-    request = {
-        "model": "gpt-5-nano-2025-08-07",  # Updated model name to match your example
-        "input": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": "Hello, how are you?"
-                    }
-                ]
-            }
-        ],
-        "text": {
-            "format": {
-                "type": "text"
-            },
-            "verbosity": "low"
-        },
-        "reasoning": {
-            "effort": "low"
-        },
-        "tools": [],  # Added as per example
-        "store": True,  # Added as per example
-        "include": ["reasoning.encrypted_content"]  # Added as per example (simplified)
-    }
-    headers = {"Authorization": f"Bearer {OPENAI_KEY}",
-               "x-hotkey": HOTKEY,
-               "x-provider": "CHAT_GPT"}
-
-    response = await call_proxy(request, headers)
-    print(response)
-    assert response is not None

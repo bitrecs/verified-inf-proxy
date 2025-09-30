@@ -31,12 +31,18 @@ async def call_proxy(
 @pytest.mark.asyncio
 async def test_call_proxy():
     request = {
-        "model": "gpt-4o-mini",
+        "model": "llama-3.1-8b-instant",
         "messages": [{"role": "user", "content": "Hello, how are you?"}]
     }
     headers = {"Authorization": f"Bearer {GROQ_KEY}",
                "x-hotkey": HOTKEY,
-               "x-provider": "OPEN_ROUTER"}
+               "x-provider": "GROQ"}
 
     response = await call_proxy(request, headers)
     assert response is not None
+    assert "response" in response
+    assert "choices" in response["response"]
+    assert len(response["response"]["choices"]) > 0
+    assert "message" in response["response"]["choices"][0]
+    assert "content" in response["response"]["choices"][0]["message"]
+    assert len(response["response"]["choices"][0]["message"]["content"]) > 0
