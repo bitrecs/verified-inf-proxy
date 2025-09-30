@@ -40,3 +40,9 @@ async def test_call_proxy():
 
     response = await call_proxy(request, headers)
     assert response is not None
+    assert "response" in response
+    assert "choices" in response["response"]
+    assert len(response["response"]["choices"]) > 0
+    assert "message" in response["response"]["choices"][0]
+    assert "content" in response["response"]["choices"][0]["message"]
+    assert len(response["response"]["choices"][0]["message"]["content"]) > 0
