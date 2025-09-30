@@ -42,14 +42,13 @@ client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Initialize state
+async def lifespan(app: FastAPI):    
     logger.info("Server starting up")        
     app.state.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
     # Create background tasks
     logger.info("Creating metagraph data task")
-    loaded_metagraph = asyncio.create_task(update_metagraph_data(app))
+    loaded_metagraph = asyncio.create_task(update_metagraph_data())
     try:
         yield
     finally:
@@ -125,6 +124,7 @@ class SignedResponse(BaseModel):
 
 
 @app.get("/health")
+@limiter.limit("180/minute")
 async def health():
     node_count = len(metagraph['uids']) if metagraph else 0
     return {"status": "healthy", "nodes": node_count}
@@ -183,9 +183,7 @@ async def forward_proxy_request(
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
 
-        payload = completion_request.model_dump(exclude_unset=True)
-
-        # Send the request to openai or openrouter
+        payload = completion_request.model_dump(exclude_unset=True)        
         response = await client.post(
             url,
             json=payload,
