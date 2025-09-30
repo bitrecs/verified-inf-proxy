@@ -9,6 +9,8 @@ import base64
 import httpx
 import asyncio
 import logging
+import threading
+import concurrent
 import numpy as np
 from dotenv import load_dotenv
 load_dotenv()
@@ -38,16 +40,46 @@ BT_NETUID = int(os.environ.get("BT_NETUID", 296))
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    logger.info("Server starting up")
+    # Initialize state
+    logger.info("Server starting up")        
+    app.state.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+
+    # Create background tasks
     logger.info("Creating metagraph data task")
-    asyncio.create_task(update_metagraph_data())
-    yield
-    # Shutdown
-    await client.aclose()
-    logger.info("Server shutting down")
+    loaded_metagraph = asyncio.create_task(update_metagraph_data(app))
+    try:
+        yield
+    finally:
+        logger.info("Starting shutdown cleanup...")
+        # Cancel background tasks
+        loaded_metagraph.cancel()
+        
+        await asyncio.gather(loaded_metagraph, return_exceptions=True)
+        await client.aclose()
+        app.state.thread_pool.shutdown(wait=True)
+        # Wait for threads to settle
+        for _ in range(5):  # Try for 5 seconds
+            if threading.active_count() <= 5:  # Adjust baseline as needed
+                break
+            logger.warning(f"Waiting for {threading.active_count()} threads to terminate...")
+            await asyncio.sleep(1)
+        logger.info("Shutdown complete.")
+
+
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     # Startup
+#     logger.info("Server starting up")
+#     logger.info("Creating metagraph data task")
+#     asyncio.create_task(update_metagraph_data())
+#     yield
+#     # Shutdown
+#     await client.aclose()
+#     logger.info("Server shutting down")
+
 
 app = FastAPI(lifespan=lifespan)
 limiter = Limiter(key_func=get_remote_address)
@@ -55,7 +87,6 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # TESTING KEY
-#B64_PRIVATE_KEY = "u6Bi2YUBzVULp6PFBjG0b3GppyMW7Uw1FY4SW3wilLc="
 B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
 if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
@@ -237,7 +268,7 @@ async def update_metagraph_data():
         result = await get_metagraph_data()
         if result is not None:
             metagraph = result
-        await asyncio.sleep(300)
+        await asyncio.sleep(600)
 
 
 async def get_metagraph_data() -> dict:
@@ -359,6 +390,8 @@ async def get_metagraph_data() -> dict:
         logger.error(f'Error fetching metagraph data: {e}')
         logger.error(f'Traceback: {traceback.format_exc()}')
         return None
+    finally:
+        gc.collect()
 
 
 async def check_hotkey_stake(
