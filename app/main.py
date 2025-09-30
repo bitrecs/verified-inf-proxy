@@ -41,6 +41,26 @@ BT_NETUID = int(os.environ.get("BT_NETUID", 296))
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
 
+def get_client_ip(request: Request) -> str:
+    """
+    Gets the client IP address, handling proxies and potential spoofing.
+    Prioritizes x-real-ip, then x-forwarded-for (last IP), then falls back to request.client.host.
+    """
+    if "x-real-ip" in request.headers:
+        return request.headers["x-real-ip"].strip()
+    if "x-forwarded-for" in request.headers:
+        forwarded_for = request.headers["x-forwarded-for"].strip()
+        ips = [ip.strip() for ip in forwarded_for.split(",")]
+        if ips:
+            # Get the first IP in the list (the original client IP)
+            return ips[0]
+    if request.client:
+        return str(request.client.host)
+    return get_remote_address(request)  # Fallback to slowapi's method
+
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
     logger.info("Server starting up")        
@@ -71,7 +91,8 @@ async def lifespan(app: FastAPI):
 
 #app = FastAPI(lifespan=lifespan)
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None) #disable docs for security
-limiter = Limiter(key_func=get_remote_address)
+#limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -119,7 +140,8 @@ class SignedResponse(BaseModel):
 async def health(request: Request):
     node_count = len(metagraph['uids']) if metagraph else 0
     updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
-    logger.info(f"Health check - nodes: {node_count}, last updated: {updated}")
+    request_ip = get_client_ip(request)
+    logger.info(f"Health check - ip: {request_ip}, nodes: {node_count}, last updated: {updated}")
     return {"status": "healthy",
             "nodes": node_count,
             "last_updated": updated,
@@ -148,7 +170,8 @@ async def forward_proxy_request(
     x_provider: str = Header()
 ) -> SignedResponse:
     request_id = str(uuid.uuid4())
-    client_ip = request.client.host if request.client else "unknown"
+    #client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     
     # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
@@ -162,7 +185,7 @@ async def forward_proxy_request(
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
     try:
-        match x_provider:
+        match x_provider.trim().upper():
             case "CHAT_GPT":
                 url = "https://api.openai.com/v1/chat/completions"
                 #url = "https://api.openai.com/v1/responses"
