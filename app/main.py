@@ -45,17 +45,18 @@ client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 async def lifespan(app: FastAPI):    
     logger.info("Server starting up")        
     app.state.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
-
-    # Create background tasks
+    app.state.last_updated = None
+    app.state.total_requests = 0
+    app.state.exceptions = 0
+    
     logger.info("Creating metagraph data task")
-    loaded_metagraph = asyncio.create_task(update_metagraph_data())
+    loaded_metagraph = asyncio.create_task(update_metagraph_data(app))
     try:
         yield
     finally:
         logger.info("Starting shutdown cleanup...")
         # Cancel background tasks
-        loaded_metagraph.cancel()
-        
+        loaded_metagraph.cancel()        
         await asyncio.gather(loaded_metagraph, return_exceptions=True)
         await client.aclose()
         app.state.thread_pool.shutdown(wait=True)
@@ -68,24 +69,12 @@ async def lifespan(app: FastAPI):
         logger.info("Shutdown complete.")
 
 
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     # Startup
-#     logger.info("Server starting up")
-#     logger.info("Creating metagraph data task")
-#     asyncio.create_task(update_metagraph_data())
-#     yield
-#     # Shutdown
-#     await client.aclose()
-#     logger.info("Server shutting down")
-
-
 app = FastAPI(lifespan=lifespan)
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# TESTING KEY
+
 B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
 if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
@@ -95,8 +84,8 @@ PUBLIC_KEY = PRIVATE_KEY.public_key()
 
 class ChatCompletionRequest(BaseModel):
     model: str
-    messages: list[dict] | None = None  # For GPT
-    input: list[dict] | None = None  # For Gemini
+    messages: list[dict] | None = None  #V1 ChatCompletions
+    input: list[dict] | None = None  #For GPT Responses API
     
     # Optional params
     temperature: float | None = None
@@ -115,6 +104,7 @@ class ChatCompletionRequest(BaseModel):
     text: dict | None = None  # For GPT5
     reasoning: dict | None = None  # For GPT5
 
+
 class SignedResponse(BaseModel):
     response: dict
     proof: dict
@@ -127,7 +117,13 @@ class SignedResponse(BaseModel):
 @limiter.limit("180/minute")
 async def health():
     node_count = len(metagraph['uids']) if metagraph else 0
-    return {"status": "healthy", "nodes": node_count}
+    updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
+    logger.info(f"Health check - nodes: {node_count}, last updated: {updated}")
+    return {"status": "healthy", 
+            "nodes": node_count, 
+            "last_updated": updated, 
+            "total_requests": app.state.total_requests,           
+            "exceptions": app.state.exceptions}
 
 
 @app.get("/public_key")
@@ -153,7 +149,7 @@ async def forward_proxy_request(
     request_id = str(uuid.uuid4())
     client_ip = request.client.host if request.client else "unknown"
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
-
+    app.state.total_requests += 1
     # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
     if 1==2:
         if not await check_hotkey_stake(metagraph, x_hotkey, 100):  # Minimum 100 TAO stake
@@ -212,7 +208,7 @@ async def forward_proxy_request(
         signature = PRIVATE_KEY.sign(serialized_proof)
 
         logger.info(f"Request {request_id} completed successfully")
-
+        app.state.total_successful_requests += 1
         # Return SignedResponse
         return SignedResponse(
             response=response.json(),
@@ -224,14 +220,18 @@ async def forward_proxy_request(
 
     except httpx.TimeoutException:
         logger.error(f"Timeout for request {request_id}")
+        app.state.exceptions += 1
         raise HTTPException(504, "Upstream timeout")
     except httpx.HTTPError as e:
         logger.error(f"HTTP error for request {request_id}: {str(e)}")
+        app.state.exceptions += 1
         raise HTTPException(502, f"Upstream error: {str(e)}")
     except HTTPException as e:
+        app.state.exceptions += 1
         raise e
     except Exception as e:
         logger.error(f"Unexpected error for request {request_id}: {str(e)}")
+        app.state.exceptions += 1
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -260,12 +260,13 @@ async def verify_endpoint(
         }
 
 
-async def update_metagraph_data():
+async def update_metagraph_data(app: FastAPI):
     while True:
         global metagraph
         result = await get_metagraph_data()
         if result is not None:
             metagraph = result
+            app.state.last_updated = datetime.now(timezone.utc)
         await asyncio.sleep(600)
 
 
