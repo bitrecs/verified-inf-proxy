@@ -208,7 +208,7 @@ async def forward_proxy_request(
         signature = PRIVATE_KEY.sign(serialized_proof)
 
         logger.info(f"Request {request_id} completed successfully")
-        app.state.total_successful_requests += 1
+        app.state.total_requests += 1
         # Return SignedResponse
         return SignedResponse(
             response=response.json(),
