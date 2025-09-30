@@ -115,14 +115,14 @@ class SignedResponse(BaseModel):
 
 @app.get("/health")
 @limiter.limit("180/minute")
-async def health():
+async def health(request: Request):
     node_count = len(metagraph['uids']) if metagraph else 0
     updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
     logger.info(f"Health check - nodes: {node_count}, last updated: {updated}")
-    return {"status": "healthy", 
-            "nodes": node_count, 
-            "last_updated": updated, 
-            "total_requests": app.state.total_requests,           
+    return {"status": "healthy",
+            "nodes": node_count,
+            "last_updated": updated,
+            "total_requests": app.state.total_requests,
             "exceptions": app.state.exceptions}
 
 
