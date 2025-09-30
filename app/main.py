@@ -173,7 +173,7 @@ async def forward_proxy_request(
     #client_ip = request.client.host if request.client else "unknown"
     client_ip = get_client_ip(request)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
-    
+    st = time.perf_counter()
     # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
     if 1==2:
         if not await check_hotkey_stake(metagraph, x_hotkey, 100):  # Minimum 100 TAO stake
@@ -223,7 +223,7 @@ async def forward_proxy_request(
 
         # Core proof (what gets signed - NO time data)
         proof = {
-            "request_hash": hashlib.sha256(json.dumps(completion_request.dict()).encode()).hexdigest(),
+            "request_hash": hashlib.sha256(json.dumps(completion_request.model_dump()).encode()).hexdigest(),
             "response_hash": hashlib.sha256(response.content).hexdigest(),
             "hotkey": x_hotkey,
             "model": completion_request.model,
@@ -238,9 +238,13 @@ async def forward_proxy_request(
         serialized_proof = json.dumps(proof, sort_keys=True).encode()
         signature = PRIVATE_KEY.sign(serialized_proof)
 
-        logger.info(f"Request {request_id} completed successfully")
-        app.state.total_requests += 1
+        #logger.info(f"Request {request_id} completed successfully")
+        
+        et = time.perf_counter()
+        logger.info(f"Request {request_id} took {et - st:.2f} seconds")
+
         # Return SignedResponse
+        app.state.total_requests += 1
         return SignedResponse(
             response=response.json(),
             proof=proof,
