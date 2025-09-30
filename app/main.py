@@ -185,7 +185,7 @@ async def forward_proxy_request(
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
     try:
-        match x_provider.trim().upper():
+        match x_provider.upper().strip():
             case "CHAT_GPT":
                 # Check if it's GPT-5 family model
                 if completion_request.model.startswith("gpt-5"):
