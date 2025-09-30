@@ -149,7 +149,7 @@ async def forward_proxy_request(
     request_id = str(uuid.uuid4())
     client_ip = request.client.host if request.client else "unknown"
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
-    app.state.total_requests += 1
+    
     # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
     if 1==2:
         if not await check_hotkey_stake(metagraph, x_hotkey, 100):  # Minimum 100 TAO stake
