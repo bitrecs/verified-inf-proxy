@@ -202,6 +202,8 @@ async def forward_proxy_request(
                 url = "https://api.groq.com/openai/v1/chat/completions"
             case "CEREBRAS":
                 url = "https://api.cerebras.ai/v1/chat/completions"
+            case "GROK":                
+                url = "https://api.x.ai/v1/chat/completions"
             case _:
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
@@ -215,7 +217,8 @@ async def forward_proxy_request(
         
         if response.status_code != 200:
             logger.error(f"Upstream error for request {request_id}: {response.status_code}")
-            logger.error(f"Response content: {response.text}")            
+            logger.error(f"Response content: {response.text}")
+            #logger.error(f"{traceback.format_exc()}")
             raise HTTPException(status_code=response.status_code, detail=response.text)
 
         # Core proof (what gets signed - NO time data)
