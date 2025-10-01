@@ -2,11 +2,13 @@ import os
 import json
 import logging
 from typing import List
-from app.main import SignedResponse
+
+from app.models import SignedResponse
+
 logger = logging.getLogger("perseus")
 
 
-async def read_verified_from_file() -> List[SignedResponse]:    
+async def read_verified_from_file() -> List[SignedResponse]:
     try:
         log_file = "data/verified_results.json"
         json_file_path = os.path.join(os.path.dirname(__file__), log_file)

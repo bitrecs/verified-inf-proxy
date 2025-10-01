@@ -14,6 +14,7 @@ import concurrent
 import numpy as np
 from dotenv import load_dotenv
 
+from app.models import ChatCompletionRequest, SignedResponse
 from app.utils import read_verified_from_file, write_verified_to_file
 load_dotenv()
 import bittensor as bt
@@ -43,23 +44,17 @@ BT_NETUID = int(os.environ.get("BT_NETUID", 296))
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
 
-def get_client_ip(request: Request) -> str:
-    """
-    Gets the client IP address, handling proxies and potential spoofing.
-    Prioritizes x-real-ip, then x-forwarded-for (last IP), then falls back to request.client.host.
-    """
+def get_client_ip(request: Request) -> str:    
     if "x-real-ip" in request.headers:
         return request.headers["x-real-ip"].strip()
     if "x-forwarded-for" in request.headers:
         forwarded_for = request.headers["x-forwarded-for"].strip()
         ips = [ip.strip() for ip in forwarded_for.split(",")]
-        if ips:
-            # Get the first IP in the list (the original client IP)
+        if ips:            
             return ips[0]
     if request.client:
         return str(request.client.host)
     return get_remote_address(request)  # Fallback to slowapi's method
-
 
 
 
@@ -103,37 +98,6 @@ if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
-
-
-class ChatCompletionRequest(BaseModel):
-    model: str
-    messages: list[dict] | None = None  #V1 ChatCompletions
-    input: list[dict] | None = None  #For GPT Responses API
-    
-    # Optional params
-    temperature: float | None = None
-    max_tokens: int | None = None
-    top_p: float | None = None
-    stream: bool = False
-    stop: str | list[str] | None = None
-    
-    # OpenRouter params
-    provider: dict | None = None
-    transforms: list[str] | None = None
-    route: str | None = None
-
-    model_config = ConfigDict(extra="allow")
-
-    text: dict | None = None  # For GPT5
-    reasoning: dict | None = None  # For GPT5
-
-
-class SignedResponse(BaseModel):
-    response: dict
-    proof: dict
-    signature: str
-    timestamp: str
-    ttl: str
 
 
 
@@ -182,7 +146,6 @@ async def recs_log(request: Request):
             "verified": recs_dicts
         }
     )
-
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
