@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class LLMPRovider(Enum):
+class LLMProvider(Enum):
     OLLAMA_LOCAL = 1
     OPEN_ROUTER = 2
     CHAT_GPT = 3
@@ -14,28 +14,28 @@ class LLMPRovider(Enum):
     GROQ = 10
 
     @staticmethod
-    def from_str(value: str) -> 'LLMPRovider':
+    def from_str(value: str) -> 'LLMProvider':
          match value.upper():
             case "OLLAMA_LOCAL":
-                return LLMPRovider.OLLAMA_LOCAL
+                return LLMProvider.OLLAMA_LOCAL
             case "OPEN_ROUTER":
-                return LLMPRovider.OPEN_ROUTER
+                return LLMProvider.OPEN_ROUTER
             case "CHAT_GPT":
-                return LLMPRovider.CHAT_GPT
+                return LLMProvider.CHAT_GPT
             case "VLLM":
-                return LLMPRovider.VLLM
+                return LLMProvider.VLLM
             case "GEMINI":
-                return LLMPRovider.GEMINI
+                return LLMProvider.GEMINI
             case "GROK":
-                return LLMPRovider.GROK
+                return LLMProvider.GROK
             case "CLAUDE":
-                return LLMPRovider.CLAUDE
+                return LLMProvider.CLAUDE
             case "CHUTES":
-                return LLMPRovider.CHUTES
+                return LLMProvider.CHUTES
             case "CEREBRAS":
-                return LLMPRovider.CEREBRAS
+                return LLMProvider.CEREBRAS
             case "GROQ":
-                return LLMPRovider.GROQ                
+                return LLMProvider.GROQ                
             case _:
                 raise ValueError("Unknown LLMPRovider server")
         
