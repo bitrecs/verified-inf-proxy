@@ -292,7 +292,7 @@ async def forward_proxy_request(
         duration = et - st
 
         asyncio.create_task(write_verified_to_file(request_id, [signed_response]))        
-        asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id, duration)
+        asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id, duration, str(provider))
 
         app.state.total_requests += 1        
         logger.info(f"Request {request_id} took {duration:.2f} seconds")

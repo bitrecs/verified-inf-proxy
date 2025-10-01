@@ -42,7 +42,7 @@ class D1Handler:
             return []    
 
 
-    def insert_signed_response(self, response: SignedResponse, request_id: str = None, duration: float = 0) -> bool:        
+    def insert_signed_response(self, response: SignedResponse, request_id: str = None, duration: float = 0, provider: str = "") -> bool:
         """Insert a single SignedResponse into D1. request_id is optional (not in schema, but can be logged or used if added)."""
         try:
             url = f"{self.base_url}/query"
@@ -52,8 +52,8 @@ class D1Handler:
             }
             duration = round(duration, 4)
             sql = """
-            INSERT INTO signed_responses (unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, response_json, duration)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO signed_responses (unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, response_json, duration, provider)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params = [
                 response.proof['unique_id'],
@@ -65,7 +65,8 @@ class D1Handler:
                 response.timestamp,
                 response.ttl,
                 json.dumps(response.response),
-                duration
+                duration,
+                provider
             ]
             payload = {
                 "sql": sql,

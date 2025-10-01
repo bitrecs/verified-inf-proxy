@@ -12,6 +12,7 @@ class HTMLTemplates:
             model = item.get('model', 'N/A')
             duration = item.get('duration', 'N/A') or 'N/A'
             signature = item.get('signature', 'N/A')
+            provider = item.get('provider', 'N/A')
             
             # Parse response_json to extract content
             response_content = 'N/A'
@@ -38,6 +39,7 @@ class HTMLTemplates:
                             <td data-label="Timestamp" class="timestamp">{timestamp}</td>
                             <td data-label="Hotkey" class="hotkey">{hotkey}</td>
                             <td data-label="Model" class="model">{model}</td>
+                            <td data-label="Model" class="model">{provider}</td>
                             <td data-label="Response" class="response">{response_content}</td>
                             <td data-label="Duration" class="duration">{duration}s</td>
                             <td data-label="Signature" class="signature">{signature}</td>
@@ -281,6 +283,7 @@ class HTMLTemplates:
                             <th>Timestamp</th>
                             <th>Hotkey</th>
                             <th>Model</th>
+                            <th>Provider</th>
                             <th>Response</th>
                             <th>Duration</th>
                             <th>Signature</th>
