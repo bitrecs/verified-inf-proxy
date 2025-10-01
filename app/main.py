@@ -270,6 +270,7 @@ async def forward_proxy_request(
             "response_hash": hashlib.sha256(response.content).hexdigest(),
             "hotkey": x_hotkey,
             "model": completion_request.model,
+            "provider": str(provider),
             "unique_id": request_id
         }
 
@@ -332,7 +333,8 @@ async def verify_endpoint(
             "valid": True,
             "hotkey": response.proof.get("hotkey"),
             "timestamp": response.proof.get("timestamp"),
-            "model": response.proof.get("model")
+            "model": response.proof.get("model"),
+            "provider": response.proof.get("provider")
         }
     except Exception as e:
         logger.warning(f"Verification failed: {str(e)}")
@@ -495,21 +497,23 @@ async def get_metagraph_data() -> dict:
 
 
 async def check_hotkey_stake(
-    hotkey: str,  # Remove metagraph parameter
+    metagraph: dict,
+    hotkey: str,
     stake: float
 ) -> bool:
     """Check if hotkey has stake in the metagraph."""
-    if metagraph_cache is None or hotkey is None or stake is None:  # Use metagraph_cache directly
+    if metagraph is None or hotkey is None or stake is None:
         return False
-    neuron = metagraph_cache['by_hotkey'].get(hotkey)
+    neuron = metagraph['by_hotkey'].get(hotkey)
     return neuron['stake'] > stake if neuron else False
 
 async def check_request_ip(
-    hotkey: str,  # Remove metagraph parameter
+    metagraph: dict,
+    hotkey: str,
     request_ip: str,
 ) -> bool:
     """Check if request IP matches hotkey's axon IP."""
-    if metagraph_cache is None or hotkey is None or request_ip is None:  # Use metagraph_cache directly
+    if metagraph is None or hotkey is None or request_ip is None:
         return False
-    neuron = metagraph_cache['by_hotkey'].get(hotkey)
+    neuron = metagraph['by_hotkey'].get(hotkey)
     return neuron['axon_ip'] == request_ip if neuron else False
