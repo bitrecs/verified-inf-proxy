@@ -2,10 +2,9 @@ import os
 import json
 import logging
 from typing import List
-
 from app.models import SignedResponse
 
-logger = logging.getLogger("perseus")
+logger = logging.getLogger("verified")
 
 
 async def read_verified_from_file() -> List[SignedResponse]:
@@ -57,7 +56,7 @@ async def write_verified_to_file(request_id: str, verified: list) -> bool:
         
         with open(json_file_path, 'w', encoding='utf-8') as file:
             json.dump(data, file, indent=4)
-        print(f"Verified appended to {json_file_path}")
+        print(f"Verified appended to {json_file_path}")        
         return True
     except Exception as e:
         print(f"Error writing Verified to file: {e}")

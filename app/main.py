@@ -135,14 +135,14 @@ async def recs_log(request: Request):
     logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
     try:
         recs = await read_verified_from_file() or []
-        recs_dicts = [r.model_dump() for r in recs][:10_000]
+        recs_dicts = [r.model_dump() for r in recs][:5_000]
         return JSONResponse(
             status_code=200,
             content={
                 "message": "Hello from Verified Inf Proxy",
                 "ts": str(ts),
                 "network": BT_NETWORK,
-                "netuid": BT_NETUID,            
+                "netuid": BT_NETUID,
                 "verified": recs_dicts
             }
         )
@@ -160,8 +160,7 @@ async def forward_proxy_request(
     x_hotkey: str = Header(),
     x_provider: str = Header()
 ) -> SignedResponse:
-    request_id = str(uuid.uuid4())
-    #client_ip = request.client.host if request.client else "unknown"
+    request_id = str(uuid.uuid4())    
     client_ip = get_client_ip(request)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
@@ -228,12 +227,6 @@ async def forward_proxy_request(
         # Sign only the core proof
         serialized_proof = json.dumps(proof, sort_keys=True).encode()
         signature = PRIVATE_KEY.sign(serialized_proof)
-
-        #logger.info(f"Request {request_id} completed successfully")
-        
-        et = time.perf_counter()
-        logger.info(f"Request {request_id} took {et - st:.2f} seconds")
-
         signed_response = SignedResponse(
             response=response.json(),
             proof=proof,
@@ -241,25 +234,13 @@ async def forward_proxy_request(
             timestamp=timestamp,
             ttl=ttl
         )
-
         asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
-        # verified_saved = await write_verified_to_file(request_id, [signed_response])
-        # if not verified_saved:
-        #     logger.error(f"Failed to write verified to file for request ID {request_id}")
-        # else:
-        #     logger.info(f"Successfully wrote 1 verified to file for request ID {request_id}")
-        
         app.state.total_requests += 1
+        et = time.perf_counter()
+        logger.info(f"Request {request_id} took {et - st:.2f} seconds")
+
         return signed_response
     
-        # return SignedResponse(
-        #     response=response.json(),
-        #     proof=proof,
-        #     signature=base64.b64encode(signature).decode(),
-        #     timestamp=timestamp,
-        #     ttl=ttl
-        # )
-
     except httpx.TimeoutException:
         logger.error(f"Timeout for request {request_id}")
         app.state.exceptions += 1
