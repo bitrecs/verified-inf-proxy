@@ -23,6 +23,7 @@ class D1Handler:
                 "Authorization": f"Bearer {self.token}",
                 "Content-Type": "application/json"
             }
+            duration = round(duration, 4)
             sql = """
             INSERT INTO signed_responses (unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, response_json, duration)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
