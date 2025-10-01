@@ -13,6 +13,8 @@ import threading
 import concurrent
 import numpy as np
 from dotenv import load_dotenv
+
+from app.utils import read_verified_from_file, write_verified_to_file
 load_dotenv()
 import bittensor as bt
 from contextlib import asynccontextmanager
@@ -34,7 +36,7 @@ logger = logging.getLogger(__name__)
 global metagraph
 metagraph_cache = None
 metagraph_cache_timestamp = None
-CACHE_DURATION = 300
+CACHE_DURATION = 600
 BT_NETWORK = os.environ.get("BT_NETWORK", "test")
 BT_NETUID = int(os.environ.get("BT_NETUID", 296))
 
@@ -82,15 +84,14 @@ async def lifespan(app: FastAPI):
         app.state.thread_pool.shutdown(wait=True)
         # Wait for threads to settle
         for _ in range(5):  # Try for 5 seconds
-            if threading.active_count() <= 5:  # Adjust baseline as needed
+            if threading.active_count() <= 5:
                 break
             logger.warning(f"Waiting for {threading.active_count()} threads to terminate...")
             await asyncio.sleep(1)
         logger.info("Shutdown complete.")
 
 
-#app = FastAPI(lifespan=lifespan)
-app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None) #disable docs for security
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 #limiter = Limiter(key_func=get_remote_address)
 limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
@@ -135,13 +136,15 @@ class SignedResponse(BaseModel):
     ttl: str
 
 
+
+
 @app.get("/health")
 @limiter.limit("180/minute")
 async def health(request: Request):
     node_count = len(metagraph['uids']) if metagraph else 0
     updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
-    request_ip = get_client_ip(request)
-    logger.info(f"Health check - ip: {request_ip}, nodes: {node_count}, last updated: {updated}")
+    #request_ip = get_client_ip(request)
+    logger.info(f"Health check - network: {BT_NETWORK}, uid: {BT_NETUID}, nodes: {node_count}, last updated: {updated}")
     return {"status": "healthy",
             "nodes": node_count,
             "last_updated": updated,
@@ -158,6 +161,28 @@ async def get_public_key(request: Request):
     )
     public_key_hex = public_key_raw_bytes.hex()
     return JSONResponse(status_code=200, content={"public_key": public_key_hex})
+
+
+@app.get("/verified_log")
+@limiter.limit("30/minute")
+async def recs_log(request: Request):
+    ts = str(int(time.time()))
+    request_ip = get_client_ip(request)
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
+
+    recs = await read_verified_from_file() or []
+    recs_dicts = [r.to_dict() for r in recs][:10_000]
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": "Hello from Verified Inf Proxy",
+            "ts": str(ts),
+            "network": BT_NETWORK,
+            "netuid": BT_NETUID,            
+            "verified": recs_dicts
+        }
+    )
+
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
@@ -243,15 +268,31 @@ async def forward_proxy_request(
         et = time.perf_counter()
         logger.info(f"Request {request_id} took {et - st:.2f} seconds")
 
-        # Return SignedResponse
-        app.state.total_requests += 1
-        return SignedResponse(
+        signed_response = SignedResponse(
             response=response.json(),
             proof=proof,
             signature=base64.b64encode(signature).decode(),
             timestamp=timestamp,
             ttl=ttl
         )
+
+        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
+        # verified_saved = await write_verified_to_file(request_id, [signed_response])
+        # if not verified_saved:
+        #     logger.error(f"Failed to write verified to file for request ID {request_id}")
+        # else:
+        #     logger.info(f"Successfully wrote 1 verified to file for request ID {request_id}")
+        
+        app.state.total_requests += 1
+        return signed_response
+    
+        # return SignedResponse(
+        #     response=response.json(),
+        #     proof=proof,
+        #     signature=base64.b64encode(signature).decode(),
+        #     timestamp=timestamp,
+        #     ttl=ttl
+        # )
 
     except httpx.TimeoutException:
         logger.error(f"Timeout for request {request_id}")
@@ -272,7 +313,9 @@ async def forward_proxy_request(
 
 
 @app.post("/verify")
+@limiter.limit("60/minute")
 async def verify_endpoint(
+    request: Request,
     response: SignedResponse
 ) -> Dict[str, Union[bool, str]]:
     try:

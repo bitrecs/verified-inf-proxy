@@ -1,0 +1,62 @@
+import os
+import json
+import logging
+from typing import List
+from app.main import SignedResponse
+logger = logging.getLogger("perseus")
+
+
+async def read_verified_from_file() -> List[SignedResponse]:    
+    try:
+        log_file = "data/verified_results.json"
+        json_file_path = os.path.join(os.path.dirname(__file__), log_file)
+        if not os.path.exists(json_file_path):
+            logger.warning(f"File {json_file_path} does not exist. Returning empty list.")
+            return []
+
+        with open(json_file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+            return [SignedResponse(**item) for item in data if isinstance(item, dict)]
+    except Exception as e:
+        print(f"Error reading recommendations from file: {e}")
+        logger.error(f"Error reading recommendations from file: {e}")
+        return []
+
+
+async def write_verified_to_file(request_id: str, verified: list) -> bool:  
+    try:
+        train_file = "data/verified_results.json"
+        json_file_path = os.path.join(os.path.dirname(__file__), train_file)
+        os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
+
+        # Load existing data if file exists
+        if os.path.exists(json_file_path):
+            with open(json_file_path, 'r', encoding='utf-8') as file:
+                try:
+                    data = json.load(file)
+                    if not isinstance(data, list):
+                        data = []
+                except Exception:
+                    data = []
+        else:
+            data = []
+        for v in verified:
+            entry = v.model_dump()
+            entry["row_hash"] = v.to_hash()
+            entry["request_id"] = request_id
+            data.append(entry)
+        # # Append new recs with scores
+        # for rec, score in recs_with_scores:
+        #     entry = rec.to_dict()
+        #     entry["similarity_score"] = round(score, 4)
+        #     entry["row_hash"] = rec.to_hash()
+        #     entry["batch_elected_id"] = elected.to_hash() if elected else None
+        #     data.append(entry)
+        
+        with open(json_file_path, 'w', encoding='utf-8') as file:
+            json.dump(data, file, indent=4)
+        print(f"Verified appended to {json_file_path}")
+        return True
+    except Exception as e:
+        print(f"Error writing Verified to file: {e}")
+        return False
