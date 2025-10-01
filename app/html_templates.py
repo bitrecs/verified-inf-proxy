@@ -35,12 +35,12 @@ class HTMLTemplates:
 
             rows_html += f"""
                         <tr>
-                            <td class="timestamp">{timestamp}</td>
-                            <td class="hotkey">{hotkey}</td>
-                            <td class="model">{model}</td>
-                            <td class="response">{response_content}</td>
-                            <td class="duration">{duration}s</td>
-                            <td class="signature">{signature}</td>
+                            <td data-label="Timestamp" class="timestamp">{timestamp}</td>
+                            <td data-label="Hotkey" class="hotkey">{hotkey}</td>
+                            <td data-label="Model" class="model">{model}</td>
+                            <td data-label="Response" class="response">{response_content}</td>
+                            <td data-label="Duration" class="duration">{duration}s</td>
+                            <td data-label="Signature" class="signature">{signature}</td>
                         </tr>
             """
 
@@ -66,12 +66,15 @@ class HTMLTemplates:
             .container {{
                 width: 100%;
                 padding: 20px;
+                max-width: 100vw;
+                overflow-x: hidden;
             }}
             .header {{
                 background: #161b22;
                 padding: 20px;
                 border-bottom: 1px solid #30363d;
                 margin-bottom: 20px;
+                border-radius: 6px;
             }}
             .header h1 {{
                 font-size: 24px;
@@ -80,7 +83,7 @@ class HTMLTemplates:
             }}
             .stats {{
                 display: flex;
-                gap: 20px;
+                gap: 10px;
                 flex-wrap: wrap;
                 font-size: 14px;
             }}
@@ -106,8 +109,6 @@ class HTMLTemplates:
             }}
             thead {{
                 background: #0d1117;
-                position: sticky;
-                top: 0;
             }}
             th {{
                 padding: 12px;
@@ -135,10 +136,12 @@ class HTMLTemplates:
                 font-size: 12px;
                 color: #79c0ff;
                 word-break: break-all;
+                max-width: 150px;
             }}
             .model {{
                 color: #a5d6ff;
                 font-size: 13px;
+                white-space: nowrap;
             }}
             .response {{
                 max-width: 400px;
@@ -152,7 +155,7 @@ class HTMLTemplates:
                 word-break: break-word;
             }}
             .response::-webkit-scrollbar {{
-                width: 8px;
+                width: 6px;
             }}
             .response::-webkit-scrollbar-track {{
                 background: #161b22;
@@ -170,19 +173,83 @@ class HTMLTemplates:
                 font-family: 'Courier New', monospace;
                 font-size: 11px;
                 color: #8b949e;
-                max-width: 200px;
+                max-width: 120px;
                 word-break: break-all;
             }}
+            
+            /* Mobile responsive styles */
             @media (max-width: 768px) {{
                 .container {{
                     padding: 10px;
                 }}
-                th, td {{
-                    padding: 8px;
-                    font-size: 12px;
+                .header {{
+                    padding: 15px;
                 }}
+                .header h1 {{
+                    font-size: 20px;
+                }}
+                .stats {{
+                    gap: 8px;
+                }}
+                .stat-item {{
+                    font-size: 12px;
+                    padding: 6px 10px;
+                }}
+                
+                /* Hide table headers on mobile */
+                thead {{
+                    display: none;
+                }}
+                
+                /* Make table rows display as cards */
+                table, tbody {{
+                    display: block;
+                }}
+                
+                tr {{
+                    display: block;
+                    margin-bottom: 15px;
+                    background: #161b22;
+                    border: 1px solid #30363d;
+                    border-radius: 6px;
+                    padding: 12px;
+                }}
+                
+                tr:hover {{
+                    background: #1c2128;
+                }}
+                
+                td {{
+                    display: block;
+                    padding: 8px 0;
+                    border: none;
+                    text-align: left;
+                }}
+                
+                /* Add labels before content on mobile */
+                td:before {{
+                    content: attr(data-label);
+                    font-weight: 600;
+                    color: #8b949e;
+                    display: block;
+                    margin-bottom: 4px;
+                    font-size: 11px;
+                    text-transform: uppercase;
+                }}
+                
+                .hotkey, .signature {{
+                    max-width: 100%;
+                    font-size: 11px;
+                }}
+                
                 .response {{
-                    max-width: 200px;
+                    max-width: 100%;
+                    max-height: 150px;
+                    font-size: 11px;
+                }}
+                
+                .timestamp, .model, .duration {{
+                    font-size: 12px;
                 }}
             }}
         </style>
