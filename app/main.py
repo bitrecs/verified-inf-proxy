@@ -133,19 +133,22 @@ async def recs_log(request: Request):
     ts = str(int(time.time()))
     request_ip = get_client_ip(request)
     logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
-
-    recs = await read_verified_from_file() or []
-    recs_dicts = [r.to_dict() for r in recs][:10_000]
-    return JSONResponse(
-        status_code=200,
-        content={
-            "message": "Hello from Verified Inf Proxy",
-            "ts": str(ts),
-            "network": BT_NETWORK,
-            "netuid": BT_NETUID,            
-            "verified": recs_dicts
-        }
-    )
+    try:
+        recs = await read_verified_from_file() or []
+        recs_dicts = [r.model_dump() for r in recs][:10_000]
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Hello from Verified Inf Proxy",
+                "ts": str(ts),
+                "network": BT_NETWORK,
+                "netuid": BT_NETUID,            
+                "verified": recs_dicts
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in /verified_log endpoint: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
