@@ -1,3 +1,5 @@
+import hashlib
+import json
 from pydantic import BaseModel, ConfigDict
 
 
@@ -30,3 +32,8 @@ class SignedResponse(BaseModel):
     signature: str
     timestamp: str
     ttl: str
+
+    def to_hash(self) -> str:
+        thing = self.model_dump()
+        encoded = json.dumps(thing, sort_keys=True).encode('utf-8')
+        return hashlib.sha256(encoded).hexdigest()
