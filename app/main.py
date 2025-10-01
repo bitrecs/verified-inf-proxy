@@ -35,10 +35,16 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 
-global metagraph
+# Remove global keyword declaration - not needed at module level
 metagraph_cache = None
 metagraph_cache_timestamp = None
-CACHE_DURATION = 600
+CACHE_DURATION = 600 # 10 minutes
+
+# Add cache for verified display
+verified_display_cache = None
+verified_display_cache_timestamp = None
+VERIFIED_DISPLAY_CACHE_DURATION = 300  # 5 minutes
+
 BT_NETWORK = os.environ.get("BT_NETWORK", "test")
 BT_NETUID = int(os.environ.get("BT_NETUID", 296))
 B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
@@ -47,18 +53,19 @@ if not B64_PRIVATE_KEY:
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
 
-client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
-
 CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
 CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN")
 CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID")
 if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
     raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
+
 d1_client = D1Handler(
     account_id=CF_ACCOUNT_ID,
     token=CF_D1_TOKEN,
     database_id=CF_D1_DATABASE_ID
 )
+
+client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
 
 def get_client_ip(request: Request) -> str:    
@@ -114,9 +121,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.get("/health")
 @limiter.limit("180/minute")
 async def health(request: Request):
-    node_count = len(metagraph['uids']) if metagraph else 0
+    node_count = len(metagraph_cache['uids']) if metagraph_cache else 0  # Use metagraph_cache
     updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
-    #request_ip = get_client_ip(request)
     logger.info(f"Health check - network: {BT_NETWORK}, uid: {BT_NETUID}, nodes: {node_count}, last updated: {updated}")
     return {"status": "healthy",
             "nodes": node_count,
@@ -163,9 +169,21 @@ async def verified_log(request: Request):
 @app.get("/verified_display")
 @limiter.limit("30/minute")
 async def verified_display(request: Request):
+    global verified_display_cache, verified_display_cache_timestamp
+    
     ts = str(int(time.time()))
     request_ip = get_client_ip(request)
     logger.info(f"verified_display endpoint accessed from IP {request_ip} at {ts}")
+    
+    # Check if we have cached HTML and it's still valid
+    current_time = time.time()
+    if (verified_display_cache is not None and
+        verified_display_cache_timestamp is not None and
+        (current_time - verified_display_cache_timestamp) < VERIFIED_DISPLAY_CACHE_DURATION):
+        logger.info("Returning cached verified_display HTML")
+        return HTMLResponse(content=verified_display_cache)
+    
+    # Fetch fresh data
     verified = await d1_client.select_all_signed_responses(top=100)
     print(f"Fetched {len(verified)} verified records from D1")
 
@@ -174,6 +192,11 @@ async def verified_display(request: Request):
         bt_network=BT_NETWORK,
         bt_netuid=BT_NETUID
     )
+    
+    # Update cache
+    verified_display_cache = html_content
+    verified_display_cache_timestamp = current_time
+    logger.info("Updated verified_display cache")
 
     return HTMLResponse(content=html_content)
     
@@ -194,11 +217,11 @@ async def forward_proxy_request(
     st = time.perf_counter()
     # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
     if 1==2:
-        if not await check_hotkey_stake(metagraph, x_hotkey, 100):  # Minimum 100 TAO stake
+        if not await check_hotkey_stake(metagraph_cache, x_hotkey, 100):  # Minimum 100 TAO stake
             logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
             raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
     if 1==2:
-        if not await check_request_ip(metagraph, x_hotkey, client_ip):
+        if not await check_request_ip(metagraph_cache, x_hotkey, client_ip):
             logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
@@ -318,12 +341,21 @@ async def verify_endpoint(
 
 
 async def update_metagraph_data(app: FastAPI):
+    global metagraph_cache  # Only declare when modifying
     while True:
-        global metagraph
         result = await get_metagraph_data()
         if result is not None:
-            metagraph = result
+            # Clean up old metagraph before assigning new one
+            old_metagraph = metagraph_cache
+            metagraph_cache = result
             app.state.last_updated = datetime.now(timezone.utc)
+            
+            # Force cleanup of old metagraph
+            if old_metagraph is not None:
+                del old_metagraph
+                gc.collect()
+                logger.info("Cleaned up old metagraph")
+        
         await asyncio.sleep(600)
 
 
@@ -339,6 +371,7 @@ async def get_metagraph_data() -> dict:
         logger.info("Returning cached metagraph data")
         return metagraph_cache
 
+    subnet = None  # Initialize to None for proper cleanup
     try:        
         network = BT_NETWORK
         netuid = BT_NETUID
@@ -426,9 +459,7 @@ async def get_metagraph_data() -> dict:
         }
         
         logger.info(f'Successfully processed {total_neurons} neurons')
-        del subnet
-        gc.collect()
-
+        
         metagraph_result = {
             'uids': data['uids'],  # original list
             'by_hotkey': {neuron['hotkey']: neuron for neuron in data['uids']},  # O(1) lookup
@@ -448,27 +479,35 @@ async def get_metagraph_data() -> dict:
         logger.error(f'Traceback: {traceback.format_exc()}')
         return None
     finally:
+        # Ensure subnet is cleaned up even if there's an exception
+        if subnet is not None:
+            # Close any open connections if the method exists
+            if hasattr(subnet, 'close'):
+                try:
+                    subnet.close()
+                except Exception as e:
+                    logger.warning(f"Error closing subnet: {e}")
+            del subnet
         gc.collect()
+        logger.info("Subnet cleanup completed")
 
 
 async def check_hotkey_stake(
-    metagraph: dict, 
-    hotkey: str, 
+    hotkey: str,  # Remove metagraph parameter
     stake: float
 ) -> bool:
     """Check if hotkey has stake in the metagraph."""
-    if metagraph is None or hotkey is None or stake is None:
+    if metagraph_cache is None or hotkey is None or stake is None:  # Use metagraph_cache directly
         return False
-    neuron = metagraph['by_hotkey'].get(hotkey)
+    neuron = metagraph_cache['by_hotkey'].get(hotkey)
     return neuron['stake'] > stake if neuron else False
 
 async def check_request_ip(
-    metagraph: dict,
-    hotkey: str,
+    hotkey: str,  # Remove metagraph parameter
     request_ip: str,
 ) -> bool:
     """Check if request IP matches hotkey's axon IP."""
-    if metagraph is None or hotkey is None or request_ip is None:
+    if metagraph_cache is None or hotkey is None or request_ip is None:  # Use metagraph_cache directly
         return False
-    neuron = metagraph['by_hotkey'].get(hotkey)
+    neuron = metagraph_cache['by_hotkey'].get(hotkey)
     return neuron['axon_ip'] == request_ip if neuron else False
