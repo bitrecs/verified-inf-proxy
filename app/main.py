@@ -2,26 +2,26 @@ import os
 import gc
 import time
 import json
-import traceback
 import uuid
 import hashlib
 import base64
 import httpx
 import asyncio
 import logging
+import traceback
 import threading
 import concurrent
 import numpy as np
+import bittensor as bt
 from dotenv import load_dotenv
+load_dotenv()
 
 from app.models import ChatCompletionRequest, SignedResponse
 from app.utils import read_verified_from_file, write_verified_to_file
-load_dotenv()
-import bittensor as bt
+from app.d1 import D1Handler
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from typing import Union, Dict
-from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -40,8 +40,24 @@ metagraph_cache_timestamp = None
 CACHE_DURATION = 600
 BT_NETWORK = os.environ.get("BT_NETWORK", "test")
 BT_NETUID = int(os.environ.get("BT_NETUID", 296))
+B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
+if not B64_PRIVATE_KEY:
+    raise ValueError("B64_PRIVATE_KEY environment variable not set")
+PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
+PUBLIC_KEY = PRIVATE_KEY.public_key()
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
+
+CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
+CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN")
+CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID")
+if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
+    raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
+d1_client = D1Handler(
+    account_id=CF_ACCOUNT_ID,
+    token=CF_D1_TOKEN,
+    database_id=CF_D1_DATABASE_ID
+)
 
 
 def get_client_ip(request: Request) -> str:    
@@ -91,14 +107,6 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
-B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
-if not B64_PRIVATE_KEY:
-    raise ValueError("B64_PRIVATE_KEY environment variable not set")
-PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
-PUBLIC_KEY = PRIVATE_KEY.public_key()
-
 
 
 
@@ -234,7 +242,10 @@ async def forward_proxy_request(
             timestamp=timestamp,
             ttl=ttl
         )
-        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
+        
+        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))        
+        asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id)
+
         app.state.total_requests += 1
         et = time.perf_counter()
         logger.info(f"Request {request_id} took {et - st:.2f} seconds")
