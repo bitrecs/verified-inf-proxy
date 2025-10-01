@@ -1,0 +1,50 @@
+[
+    {
+        "response": {
+            "id": "gen-1759345497-HbzXyB8r9OROujawX6fN",
+            "provider": "OpenAI",
+            "model": "openai/gpt-4o-mini",
+            "object": "chat.completion",
+            "created": 1759345497,
+            "choices": [
+                {
+                    "logprobs": null,
+                    "finish_reason": "stop",
+                    "native_finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! I'm just a computer program, so I don't have feelings, but I'm here and ready to help you. How can I assist you today?",
+                        "refusal": null,
+                        "reasoning": null
+                    }
+                }
+            ],
+            "system_fingerprint": "fp_560af6e559",
+            "usage": {
+                "prompt_tokens": 13,
+                "completion_tokens": 30,
+                "total_tokens": 43,
+                "prompt_tokens_details": {
+                    "cached_tokens": 0,
+                    "audio_tokens": 0
+                },
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0
+                }
+            }
+        },
+        "proof": {
+            "request_hash": "d23c84e52da70e66c055a7b623c532de94da47b2bd842a01ca2656a900cf9fb6",
+            "response_hash": "73f4866b3057f673b771566da5ea89ae9f136a9f13aa76f2821176b17d97f387",
+            "hotkey": "12442114z3535353353535",
+            "model": "gpt-4o-mini",
+            "unique_id": "d96fc221-3a6d-4d97-b046-5567843c36c7"
+        },
+        "signature": "wnRsHkJlJ+CZp0gKz00qBdjxTay92+Lp8O1b0+mKU8/m/8w5KRorNXmOQdRD+60GYyRxNIlOHFJRucZiUmKYCg==",
+        "timestamp": "2025-10-01T19:04:56.308817+00:00",
+        "ttl": "2025-10-01T19:09:56.308827+00:00",
+        "row_hash": "c0e57f80b56c0e8d78ed9b4cb12ed41933bd14521dc6378c361f2a00fa7cc1ea",
+        "request_id": "d96fc221-3a6d-4d97-b046-5567843c36c7"
+    }
+]

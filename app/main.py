@@ -16,6 +16,7 @@ import bittensor as bt
 from dotenv import load_dotenv
 load_dotenv()
 
+from app.llm_providers import LLMPRovider
 from app.models import ChatCompletionRequest, SignedResponse
 from app.utils import read_verified_from_file, write_verified_to_file
 from app.d1 import D1Handler
@@ -226,24 +227,25 @@ async def forward_proxy_request(
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
     try:
-        match x_provider.upper().strip():
-            case "CHAT_GPT":
+        provider = LLMPRovider.from_str(x_provider)
+        match provider:
+            case LLMPRovider.CHAT_GPT:
                 # Check if it's GPT-5 family model
                 if completion_request.model.startswith("gpt-5"):
                     url = "https://api.openai.com/v1/responses"
                 else:
                     url = "https://api.openai.com/v1/chat/completions"
-            case "OPEN_ROUTER":
+            case LLMPRovider.OPEN_ROUTER:
                 url = "https://openrouter.ai/api/v1/chat/completions"
-            case "GEMINI":
+            case LLMPRovider.GEMINI:
                 url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-            case "CHUTES":
+            case LLMPRovider.CHUTES:
                 url = "https://llm.chutes.ai/v1/chat/completions"
-            case "GROQ":
+            case LLMPRovider.GROQ:
                 url = "https://api.groq.com/openai/v1/chat/completions"
-            case "CEREBRAS":
+            case LLMPRovider.CEREBRAS:
                 url = "https://api.cerebras.ai/v1/chat/completions"
-            case "GROK":                
+            case LLMPRovider.GROK:  
                 url = "https://api.x.ai/v1/chat/completions"
             case _:
                 logger.warning(f"Unknown provider for request {request_id}")
