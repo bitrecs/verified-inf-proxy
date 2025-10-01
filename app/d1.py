@@ -4,8 +4,7 @@ import requests
 from dotenv import load_dotenv
 load_dotenv()
 from app.models import SignedResponse
-
-logger = logging.getLogger("verified")
+logger = logging.getLogger(__name__)
 
 class D1Handler:
     def __init__(self, account_id: str, token: str, database_id: str):
@@ -13,7 +12,35 @@ class D1Handler:
         self.token = token
         self.database_id = database_id
         self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}"    
-    
+
+    async def select_all_signed_responses(self, top: int = 100):
+        """Select all SignedResponses from D1, limited by 'top'."""
+        try:
+            url = f"{self.base_url}/query"
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json"
+            }
+            sql = "SELECT * FROM signed_responses ORDER BY timestamp DESC LIMIT ?"
+            params = [top]
+            payload = {
+                "sql": sql,
+                "params": params
+            }
+            resp = requests.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get('success'):
+                # Access the nested results correctly
+                return result['result'][0]['results']
+            else:
+                logger.error(f"Failed to fetch signed responses: {result}")
+                return []
+        except Exception as e:
+            print(f"Error fetching signed responses: {e}")
+            logger.error(f"Error fetching signed responses: {e}")
+            return []    
+
 
     def insert_signed_response(self, response: SignedResponse, request_id: str = None, duration: float = 0) -> bool:        
         """Insert a single SignedResponse into D1. request_id is optional (not in schema, but can be logged or used if added)."""

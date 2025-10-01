@@ -19,8 +19,9 @@ load_dotenv()
 from app.models import ChatCompletionRequest, SignedResponse
 from app.utils import read_verified_from_file, write_verified_to_file
 from app.d1 import D1Handler
+from app.html_templates import HTMLTemplates
 from contextlib import asynccontextmanager
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from typing import Union, Dict
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
@@ -137,7 +138,7 @@ async def get_public_key(request: Request):
 
 @app.get("/verified_log")
 @limiter.limit("30/minute")
-async def recs_log(request: Request):
+async def verified_log(request: Request):
     ts = str(int(time.time()))
     request_ip = get_client_ip(request)
     logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
@@ -157,6 +158,25 @@ async def recs_log(request: Request):
     except Exception as e:
         logger.error(f"Error in /verified_log endpoint: {str(e)}")
         return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+
+
+@app.get("/verified_display")
+@limiter.limit("30/minute")
+async def verified_display(request: Request):
+    ts = str(int(time.time()))
+    request_ip = get_client_ip(request)
+    logger.info(f"verified_display endpoint accessed from IP {request_ip} at {ts}")
+    verified = await d1_client.select_all_signed_responses(top=100)
+    print(f"Fetched {len(verified)} verified records from D1")
+
+    html_content = HTMLTemplates.render_verified_display(
+        verified=verified,
+        bt_network=BT_NETWORK,
+        bt_netuid=BT_NETUID
+    )
+
+    return HTMLResponse(content=html_content)
+    
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
