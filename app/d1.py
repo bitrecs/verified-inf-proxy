@@ -15,7 +15,7 @@ class D1Handler:
         self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}"    
     
 
-    def insert_signed_response(self, response: SignedResponse, request_id: str = None) -> bool:        
+    def insert_signed_response(self, response: SignedResponse, request_id: str = None, duration: float = 0) -> bool:        
         """Insert a single SignedResponse into D1. request_id is optional (not in schema, but can be logged or used if added)."""
         try:
             url = f"{self.base_url}/query"
@@ -24,8 +24,8 @@ class D1Handler:
                 "Content-Type": "application/json"
             }
             sql = """
-            INSERT INTO signed_responses (unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, response_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO signed_responses (unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, response_json, duration)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params = [
                 response.proof['unique_id'],
@@ -36,7 +36,8 @@ class D1Handler:
                 response.signature,
                 response.timestamp,
                 response.ttl,
-                json.dumps(response.response)
+                json.dumps(response.response),
+                duration
             ]
             payload = {
                 "sql": sql,
