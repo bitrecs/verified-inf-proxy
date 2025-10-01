@@ -243,8 +243,9 @@ async def forward_proxy_request(
             ttl=ttl
         )
         
-        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))        
-        asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id)
+        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
+        asyncio.create_task(d1_client.insert_signed_response(signed_response, request_id))
+        #asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id)
 
         app.state.total_requests += 1
         et = time.perf_counter()
