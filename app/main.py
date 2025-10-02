@@ -38,14 +38,13 @@ logger = logging.getLogger(__name__)
 
 metagraph_cache = None
 metagraph_cache_timestamp = None
-CACHE_DURATION = 600 # 10 minutes
+METAGRAPH_CACHE_DURATION = 600 # 10 minutes
 
 verified_display_cache = None
 verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 300  # 5 minutes
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
-
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "test")
 BT_NETUID = int(os.environ.get("BT_NETUID", 296))
@@ -88,7 +87,7 @@ async def get_metagraph_data() -> dict:
     current_time = time.time()
     if (metagraph_cache is not None and
         metagraph_cache_timestamp is not None and
-        (current_time - metagraph_cache_timestamp) < CACHE_DURATION):
+        (current_time - metagraph_cache_timestamp) < METAGRAPH_CACHE_DURATION):
         logger.info("Returning cached metagraph data")
         return metagraph_cache
 
@@ -107,13 +106,26 @@ async def get_metagraph_data() -> dict:
         substrate = await loop.run_in_executor(
             None,
             lambda: interface.get_substrate(subtensor_network=network)
-        )
-        
+        )        
         # Fetch nodes in executor to avoid blocking
         nodes = await loop.run_in_executor(
             None,
             lambda: get_nodes_for_netuid(substrate=substrate, netuid=netuid)
         )
+        
+        # CRITICAL: Convert to primitive types immediately and release node objects
+        neurons = []
+        for node in nodes:
+            neurons.append({
+                'uid': int(node.node_id),
+                'hotkey': str(node.hotkey),
+                'stake': float(node.stake),
+                'axon_ip': str(node.ip),
+                'axon_port': int(node.port)
+            })
+        
+        # Clear the nodes list immediately to release fiber objects
+        del nodes
         
         # Get block info
         head = await loop.run_in_executor(
@@ -122,41 +134,28 @@ async def get_metagraph_data() -> dict:
         )
         block_number = head['header']['number']
         
-        # Build data structure
+        # Build data structure using already-converted neurons
         data = {
-            'uids': [],
+            'uids': neurons,  # Already converted above
             'network_info': {
                 'netuid': netuid,
                 'network': network,
                 'block': block_number,
-                'total_neurons': len(nodes),
+                'total_neurons': len(neurons),
                 'timestamp': datetime.now().isoformat()
             },
-            'aggregated_stats': {}
+            'aggregated_stats': {
+                'total_neurons': len(neurons)
+            }
         }
         
-        neurons = []
-        for node in nodes:
-            neurons.append({
-                'uid': node.node_id,
-                'hotkey': node.hotkey,
-                'stake': node.stake,
-                'axon_ip': node.ip,
-                'axon_port': node.port
-            })  
-             
-        data['uids'] = neurons
-        total_neurons = len(data['uids'])
-        data['aggregated_stats'] = {
-            'total_neurons': total_neurons
-        }        
+        logger.info(f'Successfully processed {len(neurons)} neurons from block {block_number}')
         
-        logger.info(f'Successfully processed {total_neurons} neurons from block {block_number}')
-        
+        # Build indexes directly from neurons
         metagraph_result = {
             'uids': data['uids'],
             'by_hotkey': {neuron['hotkey']: neuron for neuron in data['uids']},
-            'by_ip': {neuron['axon_ip']: neuron for neuron in data['uids']},
+            'by_ip': {neuron['axon_ip']: neuron for neuron in data['uids'] if neuron['axon_ip']},
             'network_info': data['network_info'],
             'aggregated_stats': data['aggregated_stats']
         }
@@ -194,15 +193,12 @@ async def get_metagraph_data() -> dict:
                     except Exception as e:
                         logger.warning(f"Error closing substrate interface: {e}")
                 
-                # Don't clear __dict__ - let Python's garbage collector handle it naturally
-                # This prevents the AttributeError in __del__
-                
             except Exception as e:
                 logger.error(f"Error during substrate cleanup: {e}")
             finally:
                 # Set to None to allow garbage collection
                 substrate = None
-        
+
         # Aggressive garbage collection
         for _ in range(3):
             gc.collect()
@@ -254,8 +250,8 @@ async def update_metagraph_data(app: FastAPI):
             logger.error(traceback.format_exc())
         
         # Wait before next refresh
-        logger.info(f"Sleeping for {CACHE_DURATION} seconds. Active threads: {threading.active_count()}")
-        await asyncio.sleep(CACHE_DURATION)
+        logger.info(f"Sleeping for {METAGRAPH_CACHE_DURATION} seconds. Active threads: {threading.active_count()}")
+        await asyncio.sleep(METAGRAPH_CACHE_DURATION)
 
 
 async def check_hotkey_stake(
@@ -268,6 +264,7 @@ async def check_hotkey_stake(
         return False
     neuron = metagraph['by_hotkey'].get(hotkey)
     return neuron['stake'] > stake if neuron else False
+
 
 async def check_request_ip(
     metagraph: dict,
@@ -327,12 +324,19 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def health(request: Request):
     node_count = len(metagraph_cache['uids']) if metagraph_cache else 0
     updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
-    logger.info(f"Health check - network: {BT_NETWORK}, uid: {BT_NETUID}, nodes: {node_count}, last updated: {updated}")
-    return {"status": "healthy",
-            "nodes": node_count,
-            "last_updated": updated,
-            "total_requests": app.state.total_requests,
-            "exceptions": app.state.exceptions}
+    thread_count = threading.active_count()
+
+    if thread_count > 50:
+        logger.warning(f"High thread count detected: {thread_count}")
+    
+    return {
+        "status": "healthy",
+        "nodes": node_count,
+        "last_updated": updated,
+        "total_requests": app.state.total_requests,
+        "exceptions": app.state.exceptions,
+        "threads": thread_count
+    }
 
 
 @app.get("/public_key")
@@ -418,21 +422,24 @@ async def forward_proxy_request(
     client_ip = get_client_ip(request)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
-    # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
+    
+    if not authorization or not authorization.startswith("Bearer "):
+        logger.warning(f"Request {request_id} missing or invalid Authorization header")
+        raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
+    
     if 1==2:
-        if not await check_hotkey_stake(metagraph_cache, x_hotkey, 100):  # Pass metagraph_cache
+        if not await check_hotkey_stake(metagraph_cache, x_hotkey, 100):
             logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
             raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
     if 1==2:
-        if not await check_request_ip(metagraph_cache, x_hotkey, client_ip):  # Pass metagraph_cache
+        if not await check_request_ip(metagraph_cache, x_hotkey, client_ip):
             logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
     try:
         provider = LLMProvider.from_str(x_provider)
         match provider:
-            case LLMProvider.CHAT_GPT:
-                # Check if it's GPT-5 family model
+            case LLMProvider.CHAT_GPT:                
                 if completion_request.model.startswith("gpt-5"):
                     url = "https://api.openai.com/v1/responses"
                 else:
@@ -475,13 +482,13 @@ async def forward_proxy_request(
             "unique_id": request_id
         }
 
-        # Time metadata (NOT signed)
-        timestamp = datetime.now(timezone.utc).isoformat()
-        ttl = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
-
         # Sign only the core proof
         serialized_proof = json.dumps(proof, sort_keys=True).encode()
         signature = PRIVATE_KEY.sign(serialized_proof)
+        
+        # Time metadata (NOT signed)
+        timestamp = datetime.now(timezone.utc).isoformat()
+        ttl = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
         signed_response = SignedResponse(
             response=response.json(),
             proof=proof,
@@ -492,12 +499,11 @@ async def forward_proxy_request(
         et = time.perf_counter()
         duration = et - st
 
-        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))        
+        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
         asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id, duration, str(provider))
 
-        app.state.total_requests += 1        
+        app.state.total_requests += 1
         logger.info(f"Request {request_id} took {duration:.2f} seconds")
-
         return signed_response
     
     except httpx.TimeoutException:
