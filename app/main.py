@@ -11,8 +11,6 @@ import logging
 import traceback
 import threading
 import concurrent
-import numpy as np
-import bittensor as bt
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -32,16 +30,17 @@ from slowapi.errors import RateLimitExceeded
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives import serialization
+from fiber.chain import interface
+from fiber.chain.fetch_nodes import get_nodes_for_netuid
+
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 
-# Remove global keyword declaration - not needed at module level
 metagraph_cache = None
 metagraph_cache_timestamp = None
 CACHE_DURATION = 600 # 10 minutes
 
-# Add cache for verified display
 verified_display_cache = None
 verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 300  # 5 minutes
@@ -103,7 +102,7 @@ async def lifespan(app: FastAPI):
         await client.aclose()
         app.state.thread_pool.shutdown(wait=True)
         # Wait for threads to settle
-        for _ in range(5):  # Try for 5 seconds
+        for _ in range(5):
             if threading.active_count() <= 5:
                 break
             logger.warning(f"Waiting for {threading.active_count()} threads to terminate...")
@@ -112,7 +111,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
-#limiter = Limiter(key_func=get_remote_address)
 limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -374,8 +372,7 @@ async def get_metagraph_data() -> dict:
         (current_time - metagraph_cache_timestamp) < CACHE_DURATION):
         logger.info("Returning cached metagraph data")
         return metagraph_cache
-
-    subnet = None  # Initialize to None for proper cleanup
+    
     try:        
         network = BT_NETWORK
         netuid = BT_NETUID
@@ -383,87 +380,38 @@ async def get_metagraph_data() -> dict:
             raise ValueError("BT_NETWORK or BT_NETUID environment variables not set")
 
         logger.info(f'Fetching fresh metagraph data for {network}:{netuid}...')
-        subnet = bt.metagraph(netuid=netuid, network=network, lite=True)
         
-        # Extract all relevant data from metagraph
+        substrate = interface.get_substrate(subtensor_network=network)
+        nodes = get_nodes_for_netuid(substrate=substrate, netuid=netuid)
+        head = substrate.get_block()
+        block_number = head['header']['number']
         data = {
             'uids': [],
             'network_info': {
                 'netuid': netuid,
                 'network': network,
-                'block': int(subnet.block) if hasattr(subnet, 'block') else None,
-                'total_neurons': len(subnet.uids),
+                'block': block_number,
+                'total_neurons': len(nodes),
                 'timestamp': datetime.now().isoformat()
             },
             'aggregated_stats': {}
         }
-
-        for i, uid in enumerate(subnet.uids.tolist()):
-            try:
-                # Safer data extraction with bounds checking
-                def safe_get_value(tensor, uid, default=0.0):
-                    try:
-                        if tensor is not None and len(tensor) > uid:
-                            value = tensor[uid]
-                            return float(value) if not np.isnan(value) and np.isfinite(value) else default
-                    except Exception:
-                        pass
-                    return default
-                
-                try:
-                    stake = float(subnet.S[uid])
-                except Exception:
-                    stake = 0.0
-
-                hotkey = ''
-                coldkey = ''
-                axon_ip = ''
-                axon_port = 0
-                
-                try:
-                    if hasattr(subnet, 'hotkeys') and len(subnet.hotkeys) > uid:
-                        hotkey = str(subnet.hotkeys[uid])
-                except Exception:
-                    pass
-                
-                try:
-                    if hasattr(subnet, 'coldkeys') and len(subnet.coldkeys) > uid:
-                        coldkey = str(subnet.coldkeys[uid])
-                except Exception:
-                    pass
-                
-                # Extract axon information 
-                try:
-                    if hasattr(subnet, 'axons') and len(subnet.axons) > uid:
-                        axon = subnet.axons[uid]
-                        if hasattr(axon, 'ip'):
-                            axon_ip = str(axon.ip)
-                        if hasattr(axon, 'port'):
-                            axon_port = int(axon.port) if axon.port is not None else 0
-                except Exception as e:
-                    logger.info(f'Error extracting axon info for uid {uid}: {e}')
-                    pass
-                
-                neuron_data = {
-                    'uid': int(uid),
-                    'hotkey': hotkey,
-                    'stake': stake,
-                    'axon_ip': axon_ip,
-                    'axon_port': axon_port,
-                }
-                data['uids'].append(neuron_data)
-                
-            except Exception as e:
-                logger.error(f'Error processing uid {uid}: {e}')
-                continue
-
+        neurons = []
+        for node in nodes:
+            neurons.append({
+                'uid': node.node_id,
+                'hotkey': node.hotkey,
+                'stake': node.stake,
+                'axon_ip': node.ip,
+                'axon_port': node.port
+            })  
+             
+        data['uids'] = neurons
         total_neurons = len(data['uids'])
         data['aggregated_stats'] = {
-            'total_neurons': total_neurons,
-        }
-        
-        logger.info(f'Successfully processed {total_neurons} neurons')
-        
+            'total_neurons': total_neurons
+        }        
+        logger.info(f'Successfully processed {total_neurons} neurons')        
         metagraph_result = {
             'uids': data['uids'],  # original list
             'by_hotkey': {neuron['hotkey']: neuron for neuron in data['uids']},  # O(1) lookup
@@ -475,23 +423,13 @@ async def get_metagraph_data() -> dict:
         # Update cache
         metagraph_cache = metagraph_result
         metagraph_cache_timestamp = time.time()
-
         return metagraph_result
         
     except Exception as e:
         logger.error(f'Error fetching metagraph data: {e}')
         logger.error(f'Traceback: {traceback.format_exc()}')
         return None
-    finally:
-        # Ensure subnet is cleaned up even if there's an exception
-        if subnet is not None:
-            # Close any open connections if the method exists
-            if hasattr(subnet, 'close'):
-                try:
-                    subnet.close()
-                except Exception as e:
-                    logger.warning(f"Error closing subnet: {e}")
-            del subnet
+    finally:              
         gc.collect()
         logger.info("Subnet cleanup completed")
 
