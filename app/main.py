@@ -42,7 +42,7 @@ METAGRAPH_CACHE_DURATION = 600 # 10 minutes
 
 verified_display_cache = None
 verified_display_cache_timestamp = None
-VERIFIED_DISPLAY_CACHE_DURATION = 300  # 5 minutes
+VERIFIED_DISPLAY_CACHE_DURATION = 900 # 15 minutes
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
