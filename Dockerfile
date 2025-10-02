@@ -1,25 +1,24 @@
-FROM python:3.12-slim
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+# Install git (required for uv to fetch git dependencies)
+RUN apt-get update && \
+    apt-get install -y git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy dependency files first
+# Copy dependency files
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project
 
-# Copy the project
-ADD . /app
+# Copy application code
+COPY app ./app
 
-# Sync the project
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen
+# Expose port
+EXPOSE 8000
 
-# Create non-root user
-#RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-#USER appuser
-
-# Fix: app.main:app
+# Run the application
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
