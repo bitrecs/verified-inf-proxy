@@ -36,7 +36,6 @@ from fiber.chain.fetch_nodes import get_nodes_for_netuid
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
-
 metagraph_cache = None
 metagraph_cache_timestamp = None
 CACHE_DURATION = 600 # 10 minutes
@@ -44,6 +43,11 @@ CACHE_DURATION = 600 # 10 minutes
 verified_display_cache = None
 verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 300  # 5 minutes
+
+client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
+# Global substrate connection (reuse instead of recreating)
+global_substrate = None
+substrate_lock = asyncio.Lock()
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "test")
 BT_NETUID = int(os.environ.get("BT_NETUID", 296))
@@ -58,17 +62,12 @@ CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN")
 CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID")
 if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
     raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
-
 d1_client = D1Handler(
     account_id=CF_ACCOUNT_ID,
     token=CF_D1_TOKEN,
     database_id=CF_D1_DATABASE_ID
 )
 
-client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
-# Global substrate connection (reuse instead of recreating)
-global_substrate = None
-substrate_lock = asyncio.Lock()
 
 def get_client_ip(request: Request) -> str:    
     if "x-real-ip" in request.headers:
@@ -137,6 +136,7 @@ async def get_metagraph_data() -> dict:
         logger.info("Returning cached metagraph data")
         return metagraph_cache
 
+    substrate = None
     try:        
         network = BT_NETWORK
         netuid = BT_NETUID
@@ -146,11 +146,14 @@ async def get_metagraph_data() -> dict:
         logger.info(f'Fetching fresh metagraph data for {network}:{netuid}...')
         logger.info(f'Active threads before fetch: {threading.active_count()}')
         
-        # Reuse substrate connection instead of creating new one
-        substrate = await get_or_create_substrate()
+        # Create a fresh substrate connection for this fetch, then close it
+        loop = asyncio.get_event_loop()
+        substrate = await loop.run_in_executor(
+            None,
+            lambda: interface.get_substrate(subtensor_network=network)
+        )
         
         # Fetch nodes in executor to avoid blocking
-        loop = asyncio.get_event_loop()
         nodes = await loop.run_in_executor(
             None,
             lambda: get_nodes_for_netuid(substrate=substrate, netuid=netuid)
@@ -206,17 +209,43 @@ async def get_metagraph_data() -> dict:
         metagraph_cache = metagraph_result
         metagraph_cache_timestamp = time.time()
         
-        # Force garbage collection
-        collected = gc.collect()
-        logger.info(f"Garbage collected {collected} objects after metagraph fetch")
-        logger.info(f'Active threads after fetch: {threading.active_count()}')
-        
         return metagraph_result
         
     except Exception as e:
         logger.error(f'Error fetching metagraph data: {e}')
         logger.error(f'Traceback: {traceback.format_exc()}')
         return None
+    
+    finally:
+        # CRITICAL: Always close substrate connection after use
+        if substrate is not None:
+            try:
+                logger.info("Closing substrate connection")
+                if hasattr(substrate, 'close'):
+                    substrate.close()
+                
+                # Close websocket if it exists
+                if hasattr(substrate, 'websocket') and substrate.websocket:
+                    try:
+                        substrate.websocket.close()
+                    except Exception:
+                        pass
+                
+                # Clear internal state
+                if hasattr(substrate, '__dict__'):
+                    substrate.__dict__.clear()
+                
+                del substrate
+                
+            except Exception as e:
+                logger.error(f"Error closing substrate: {e}")
+        
+        # Aggressive garbage collection
+        for _ in range(3):
+            collected = gc.collect()
+        
+        logger.info(f"Garbage collected objects after metagraph fetch")
+        logger.info(f'Active threads after fetch: {threading.active_count()}')
 
 
 async def update_metagraph_data(app: FastAPI):
@@ -282,8 +311,6 @@ async def check_request_ip(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
-    global global_substrate
-    
     logger.info("Server starting up")        
     app.state.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
     app.state.last_updated = None
@@ -300,26 +327,16 @@ async def lifespan(app: FastAPI):
         loaded_metagraph.cancel()        
         await asyncio.gather(loaded_metagraph, return_exceptions=True)
         
-        # Close substrate connection
-        if global_substrate is not None:
-            try:
-                logger.info("Closing global substrate connection")
-                global_substrate.close()
-                del global_substrate
-                global_substrate = None
-            except Exception as e:
-                logger.error(f"Error closing substrate: {e}")
-        
         await client.aclose()
         app.state.thread_pool.shutdown(wait=True)
         
         # Wait for threads to settle
-        for i in range(8):  # Wait up to 20 seconds
+        for i in range(10):
             active_threads = threading.active_count()
             if active_threads <= 1:
                 logger.info(f"All threads terminated successfully")
                 break
-            logger.warning(f"Waiting for {active_threads} threads to terminate... (attempt {i+1}/8)")
+            logger.warning(f"Waiting for {active_threads} threads to terminate... (attempt {i+1}/10)")
             await asyncio.sleep(1)
         
         # Final cleanup
