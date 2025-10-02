@@ -102,18 +102,18 @@ async def lifespan(app: FastAPI):
         app.state.thread_pool.shutdown(wait=True)
         
         # Wait longer for threads to settle (fiber threads may take time)
-        for i in range(15):  # Wait up to 15 seconds
+        for i in range(7):  # Wait up to 7 seconds
             active_threads = threading.active_count()
             if active_threads <= 1:  # Only main thread left
                 logger.info(f"All threads terminated successfully")
                 break
-            logger.warning(f"Waiting for {active_threads} threads to terminate... (attempt {i+1}/15)")
+            logger.warning(f"Waiting for {active_threads} threads to terminate... (attempt {i+1}/7)")
             await asyncio.sleep(1)
         
         # Final cleanup
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
-        
+
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 limiter = Limiter(key_func=get_client_ip)
@@ -476,16 +476,16 @@ async def get_metagraph_data() -> dict:
                     substrate.close()
                     logger.info("Closed substrate connection")
                 
-                # Close any websocket connections in the substrate object
-                if hasattr(substrate, 'websocket') and substrate.websocket:
-                    try:
-                        substrate.websocket.close()
-                    except Exception as e:
-                        logger.warning(f"Error closing websocket: {e}")
+                # # Close any websocket connections in the substrate object
+                # if hasattr(substrate, 'websocket') and substrate.websocket:
+                #     try:
+                #         substrate.websocket.close()
+                #     except Exception as e:
+                #         logger.warning(f"Error closing websocket: {e}")
                 
                 # Clear internal state
-                if hasattr(substrate, '__dict__'):
-                    substrate.__dict__.clear()
+                # if hasattr(substrate, '__dict__'):
+                #     substrate.__dict__.clear()
                 
                 del substrate
                 
