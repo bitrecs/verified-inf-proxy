@@ -12,10 +12,11 @@ dependencies = [
     "httpx>=0.28.1",
     "openai>=1.102.0",
     "slowapi>=0.1.9",
-    "uvicorn>=0.35.0",    
-    "bittensor>=9.10.1",
+    "uvicorn>=0.35.0",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
+    "fiber",
+    "numpy>=2.3.3",
 ]
 
 [tool.pytest.ini_options]
@@ -24,3 +25,6 @@ pythonpath = [
   "."
 ]
 testpaths = ["tests"]
+
+[tool.uv.sources]
+fiber = { git = "https://github.com/rayonlabs/fiber.git", tag = "2.5.0" }
