@@ -37,6 +37,8 @@ def test_fiber2():
     logger.info(f"Fetched nodes in {et-st} seconds")   
     assert len(nodes) > 50
 
+    
+
    
 
 
