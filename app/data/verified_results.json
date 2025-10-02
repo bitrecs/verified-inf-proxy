@@ -1008,5 +1008,293 @@
         "ttl": "2025-10-02T12:45:01.429552+00:00",
         "row_hash": "692bf9b0f2d39f095cd46c9655a181731e6ea966a4bdfda83e6560b447fbd5e4",
         "request_id": "c6784ffd-e61a-4a83-9823-e0088e95d9ac"
+    },
+    {
+        "response": {
+            "id": "resp_0556166e9658559b0068de87c40b74819c98876db6606727b1",
+            "object": "response",
+            "created_at": 1759414212,
+            "status": "completed",
+            "background": false,
+            "billing": {
+                "payer": "developer"
+            },
+            "error": null,
+            "incomplete_details": null,
+            "instructions": null,
+            "max_output_tokens": null,
+            "max_tool_calls": null,
+            "model": "gpt-5-nano-2025-08-07",
+            "output": [
+                {
+                    "id": "rs_0556166e9658559b0068de87c51c2c819cb9c3186b03f400f5",
+                    "type": "reasoning",
+                    "encrypted_content": "gAAAAABo3ofGzvh2u2uykOlK0iB9vmd_UhgNuAl1-oRQ7qAiEgSCDwbxnM_7rx3_2GjDcJ45-IhzwXg3CiyYzDXx3BUZpuKBJ0c9pporhujuBjdi2Eby6kK_nQE450rgglFwsBnoz5wGnrl8IlzQ606KQCI2FkcHDQMk7F8ynlov5FVaVhEsQXbHZ7cD33okpcBuIFYsnbZCCEj0rXv_6NuHacQCWgfOlGAor3KRHZ4JAHRX1M-dKpHB-mK2Ofn2y0YiyoDDhLA7sPQNf_9Ua5_tKqUwVqbPDd8uCLAimEO4SBEoVk4hpvqPc07Doo1X0JahE2RI4pca2y6boZ_j-4KZxiRWUIIJyoKDD8eaGVv8k2y0O7uOdcKRZro3wJPsA1Qt5lSN_ZQPIMA1vHY38u29y98Dk_ow-4OFuUtIETXFBPNlwMDma8Ag4qL4vonhW22yBP2Uepotm3Ab_ft242PUQRpsi9A7vvVW5mdXi0OHBEPoUV65GKS02XoQW8XuhQ-QPmxz2EwyHzZ_xOPXkrfvf9QpogGgt8FRbAWTQ0fyEZxhsXVrR5zfDQgTjQ0rloCrYKmr8NGOhMZAoCVO035aiXFIsx9jQqXXcV2OoGXBwbmR-GKxHjpQqLi97glXEwL3t34LKB57Rf_-pln4Q57jzKL6f5QXuMsJSsWv08140fexuCJfHUFwbT7kUbSfSOgKgPCILsl2EKoZ-R39KiqAffBf3a1wKg8u8gKXpuEkl2UoCpvzFFxuCAsv3H5UC1wsph1zbVjz-e_a39W48oh_QWYSbI3zraHvCu7_kksjzaE-GBpMIEJA0GJofaBx0Q2XoZRnUi1ded_VaFsg7kCBZB1BPwDSjnV2eo4wZcgakNVIUTSl1-2SjcsY6uXei0Sk3U4LrxYXfiJthlldiWWBPelIXpCuPbKx_VLAOIq-a673oHVCiwHqDuT9lop_8RGjQdrBGyXfNyj04hpUfahejIIruDx_1NdLW1EEYZqCBY9-XdvVf-JBcpn9MogOuD8RKsrNN0n6VFlnd-oI1dflji5Ggb-5XcmK9NICfSpv-Rdrk5S7QpqJsNWEca2gWSpwQmp3Agla",
+                    "summary": []
+                },
+                {
+                    "id": "msg_0556166e9658559b0068de87c60324819ca13cee479d5238c3",
+                    "type": "message",
+                    "status": "completed",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "annotations": [],
+                            "logprobs": [],
+                            "text": "I\u2019m good, thanks! How can I assist you today?"
+                        }
+                    ],
+                    "role": "assistant"
+                }
+            ],
+            "parallel_tool_calls": true,
+            "previous_response_id": null,
+            "prompt_cache_key": null,
+            "reasoning": {
+                "effort": "low",
+                "summary": null
+            },
+            "safety_identifier": null,
+            "service_tier": "default",
+            "store": true,
+            "temperature": 1.0,
+            "text": {
+                "format": {
+                    "type": "text"
+                },
+                "verbosity": "low"
+            },
+            "tool_choice": "auto",
+            "tools": [],
+            "top_logprobs": 0,
+            "top_p": 1.0,
+            "truncation": "disabled",
+            "usage": {
+                "input_tokens": 12,
+                "input_tokens_details": {
+                    "cached_tokens": 0
+                },
+                "output_tokens": 19,
+                "output_tokens_details": {
+                    "reasoning_tokens": 0
+                },
+                "total_tokens": 31
+            },
+            "user": null,
+            "metadata": {}
+        },
+        "proof": {
+            "request_hash": "6cab30576215a234f940fbb0ab3bb4d18e02d611f3e8f7e73c27fce74bba1f7b",
+            "response_hash": "a0dfa36b54eabb5881d5878fbcf2420c488b40addd6e2e265a6377fc4d3e791c",
+            "hotkey": "12442114z3535353353535",
+            "model": "gpt-5-nano",
+            "provider": "CHAT_GPT",
+            "unique_id": "14b7274e-7b3a-42d8-9da8-6f29e5a374cd"
+        },
+        "signature": "++IdOuzeOu/+HsokThf4wtZwqRIp8yeUwliFM3ByP894sZycC4UdR2BD0ZYFYiOVE2kayxG8zr8Y39AB8LG5CA==",
+        "timestamp": "2025-10-02T14:10:14.992141+00:00",
+        "ttl": "2025-10-02T14:15:14.992149+00:00",
+        "row_hash": "a1be5eacc4a484dfbb7259b2b718711df62842e07fc465adfb4acc83517ff535",
+        "request_id": "14b7274e-7b3a-42d8-9da8-6f29e5a374cd"
+    },
+    {
+        "response": {
+            "id": "chatcmpl-CMEIZC7YBrOvtkTWbBLQymDZytjnj",
+            "object": "chat.completion",
+            "created": 1759414215,
+            "model": "gpt-4o-mini-2024-07-18",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! I'm just a program, so I don't have feelings, but I'm here and ready to help you. How can I assist you today?",
+                        "refusal": null,
+                        "annotations": []
+                    },
+                    "logprobs": null,
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 13,
+                "completion_tokens": 29,
+                "total_tokens": 42,
+                "prompt_tokens_details": {
+                    "cached_tokens": 0,
+                    "audio_tokens": 0
+                },
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0,
+                    "audio_tokens": 0,
+                    "accepted_prediction_tokens": 0,
+                    "rejected_prediction_tokens": 0
+                }
+            },
+            "service_tier": "default",
+            "system_fingerprint": "fp_560af6e559"
+        },
+        "proof": {
+            "request_hash": "d23c84e52da70e66c055a7b623c532de94da47b2bd842a01ca2656a900cf9fb6",
+            "response_hash": "c987479a8434f68cd52a78bd0c01658397ba985dc98958a01736d5cabd890c01",
+            "hotkey": "12442114z3535353353535",
+            "model": "gpt-4o-mini",
+            "provider": "CHAT_GPT",
+            "unique_id": "51cbf13b-452e-4c84-b075-d4c9d7ce5e25"
+        },
+        "signature": "+KCoBn12OoTGUWt4j8tlmJg/LT1UUDgkzwyYeGCpyJjXo8Oh6nHuHlT2Eq5FFE33kn2MlLz+7Gz0XaSc4O6gBg==",
+        "timestamp": "2025-10-02T14:10:17.145791+00:00",
+        "ttl": "2025-10-02T14:15:17.145801+00:00",
+        "row_hash": "c3f20434561ea638d6d7942dfa699f7948feb33fed14bab8e253e739b8d908e8",
+        "request_id": "51cbf13b-452e-4c84-b075-d4c9d7ce5e25"
+    },
+    {
+        "response": {
+            "id": "chatcmpl-CMEIb8tK5YBgIdQL6tCQgEZ0FhjHe",
+            "object": "chat.completion",
+            "created": 1759414217,
+            "model": "gpt-4o-mini-2024-07-18",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! I'm just a program, so I don't have feelings, but I'm here and ready to help you. How can I assist you today?",
+                        "refusal": null,
+                        "annotations": []
+                    },
+                    "logprobs": null,
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 13,
+                "completion_tokens": 29,
+                "total_tokens": 42,
+                "prompt_tokens_details": {
+                    "cached_tokens": 0,
+                    "audio_tokens": 0
+                },
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0,
+                    "audio_tokens": 0,
+                    "accepted_prediction_tokens": 0,
+                    "rejected_prediction_tokens": 0
+                }
+            },
+            "service_tier": "default",
+            "system_fingerprint": "fp_560af6e559"
+        },
+        "proof": {
+            "request_hash": "d23c84e52da70e66c055a7b623c532de94da47b2bd842a01ca2656a900cf9fb6",
+            "response_hash": "a491d0579c9b37a502a680b1a493ff1938b5c6d3b8690003258e6489b60a00a0",
+            "hotkey": "12442114z3535353353535",
+            "model": "gpt-4o-mini",
+            "provider": "CHAT_GPT",
+            "unique_id": "e366ba4b-bca9-48db-a1ad-3883fefbb3ec"
+        },
+        "signature": "6N/OGGMVqUuAQZN8xRhymD+Q99JWGpW/0fSyVCR7rnLUU22PG5N+1sJwZnNYvBsKjpf8OZqpDZciPir6kWqDCA==",
+        "timestamp": "2025-10-02T14:10:18.875899+00:00",
+        "ttl": "2025-10-02T14:15:18.875908+00:00",
+        "row_hash": "4e3a9b983cb598edb98aeadbc6f8f41d8b692b8382f7b78170419c5091609836",
+        "request_id": "e366ba4b-bca9-48db-a1ad-3883fefbb3ec"
+    },
+    {
+        "response": {
+            "id": "gen-1759414219-kOz5kAdb4GkYu8AcpoEI",
+            "provider": "OpenAI",
+            "model": "openai/gpt-4o-mini",
+            "object": "chat.completion",
+            "created": 1759414219,
+            "choices": [
+                {
+                    "logprobs": null,
+                    "finish_reason": "stop",
+                    "native_finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! I'm here and ready to help you. How can I assist you today?",
+                        "refusal": null,
+                        "reasoning": null
+                    }
+                }
+            ],
+            "system_fingerprint": "fp_560af6e559",
+            "usage": {
+                "prompt_tokens": 13,
+                "completion_tokens": 17,
+                "total_tokens": 30,
+                "prompt_tokens_details": {
+                    "cached_tokens": 0,
+                    "audio_tokens": 0
+                },
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0
+                }
+            }
+        },
+        "proof": {
+            "request_hash": "d23c84e52da70e66c055a7b623c532de94da47b2bd842a01ca2656a900cf9fb6",
+            "response_hash": "c922a8ce39f945eead9a34a110206d0dbb34eb121efc716de6db42fc9804bbd6",
+            "hotkey": "12442114z3535353353535",
+            "model": "gpt-4o-mini",
+            "provider": "OPEN_ROUTER",
+            "unique_id": "09dff9ca-293d-4339-bed2-654ef2160341"
+        },
+        "signature": "AjtmMYYCy66P90JJWBz5tpJgT+b2rb84KCMS3AYHTw4heshCojUWWoQvumVnOLa14SCpoVY1lyf8OoeU+J6tBg==",
+        "timestamp": "2025-10-02T14:10:19.883056+00:00",
+        "ttl": "2025-10-02T14:15:19.883079+00:00",
+        "row_hash": "4e2e89e1ec744c2c3d5f21b130475514652a467224afc05abe7388832b168264",
+        "request_id": "09dff9ca-293d-4339-bed2-654ef2160341"
+    },
+    {
+        "response": {
+            "id": "gen-1759414251-XQgKOAUwbAGIVKnB70NE",
+            "provider": "OpenAI",
+            "model": "openai/gpt-4o-mini",
+            "object": "chat.completion",
+            "created": 1759414251,
+            "choices": [
+                {
+                    "logprobs": null,
+                    "finish_reason": "stop",
+                    "native_finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! I'm just a program, but I'm here and ready to help you. How can I assist you today?",
+                        "refusal": null,
+                        "reasoning": null
+                    }
+                }
+            ],
+            "system_fingerprint": "fp_560af6e559",
+            "usage": {
+                "prompt_tokens": 13,
+                "completion_tokens": 23,
+                "total_tokens": 36,
+                "prompt_tokens_details": {
+                    "cached_tokens": 0,
+                    "audio_tokens": 0
+                },
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0
+                }
+            }
+        },
+        "proof": {
+            "request_hash": "d23c84e52da70e66c055a7b623c532de94da47b2bd842a01ca2656a900cf9fb6",
+            "response_hash": "9b17a3f59e68432a571afcc616ee85efd8a0c347b9b49e067645dc4592660b85",
+            "hotkey": "12442114z3535353353535",
+            "model": "gpt-4o-mini",
+            "provider": "OPEN_ROUTER",
+            "unique_id": "7eccb070-87d0-45f4-807c-bf20b8232029"
+        },
+        "signature": "w3Oe0wq4gvV9PTF7llfmCffw2iZGM0vASEQjpMNX+AEUBfO9K81fNrLRrftSGpLQEKUBzIhfsmyegadqkcYfBg==",
+        "timestamp": "2025-10-02T14:10:54.967786+00:00",
+        "ttl": "2025-10-02T14:15:54.967796+00:00",
+        "row_hash": "51116da21a2bf5444bd6e0d8b1847da40858d7ba015ea149b06ddbe24507f449",
+        "request_id": "7eccb070-87d0-45f4-807c-bf20b8232029"
     }
 ]
