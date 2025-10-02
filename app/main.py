@@ -66,7 +66,9 @@ d1_client = D1Handler(
 )
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
-
+# Global substrate connection (reuse instead of recreating)
+global_substrate = None
+substrate_lock = asyncio.Lock()
 
 def get_client_ip(request: Request) -> str:    
     if "x-real-ip" in request.headers:
@@ -79,11 +81,6 @@ def get_client_ip(request: Request) -> str:
     if request.client:
         return str(request.client.host)
     return get_remote_address(request)  # Fallback to slowapi's method
-
-
-# Global substrate connection (reuse instead of recreating)
-global_substrate = None
-substrate_lock = asyncio.Lock()
 
 
 async def get_or_create_substrate():
@@ -260,6 +257,29 @@ async def update_metagraph_data(app: FastAPI):
         await asyncio.sleep(CACHE_DURATION)
 
 
+async def check_hotkey_stake(
+    metagraph: dict,
+    hotkey: str,
+    stake: float
+) -> bool:
+    """Check if hotkey has stake in the metagraph."""
+    if metagraph is None or hotkey is None or stake is None:
+        return False
+    neuron = metagraph['by_hotkey'].get(hotkey)
+    return neuron['stake'] > stake if neuron else False
+
+async def check_request_ip(
+    metagraph: dict,
+    hotkey: str,
+    request_ip: str,
+) -> bool:
+    """Check if request IP matches hotkey's axon IP."""
+    if metagraph is None or hotkey is None or request_ip is None:
+        return False
+    neuron = metagraph['by_hotkey'].get(hotkey)
+    return neuron['axon_ip'] == request_ip if neuron else False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
     global global_substrate
@@ -294,12 +314,12 @@ async def lifespan(app: FastAPI):
         app.state.thread_pool.shutdown(wait=True)
         
         # Wait for threads to settle
-        for i in range(20):  # Wait up to 20 seconds
+        for i in range(8):  # Wait up to 20 seconds
             active_threads = threading.active_count()
             if active_threads <= 1:
                 logger.info(f"All threads terminated successfully")
                 break
-            logger.warning(f"Waiting for {active_threads} threads to terminate... (attempt {i+1}/20)")
+            logger.warning(f"Waiting for {active_threads} threads to terminate... (attempt {i+1}/8)")
             await asyncio.sleep(1)
         
         # Final cleanup
@@ -313,11 +333,10 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-
 @app.get("/health")
 @limiter.limit("60/minute")
 async def health(request: Request):
-    node_count = len(metagraph_cache['uids']) if metagraph_cache else 0  # Use metagraph_cache
+    node_count = len(metagraph_cache['uids']) if metagraph_cache else 0
     updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
     logger.info(f"Health check - network: {BT_NETWORK}, uid: {BT_NETUID}, nodes: {node_count}, last updated: {updated}")
     return {"status": "healthy",
@@ -395,7 +414,6 @@ async def verified_display(request: Request):
     logger.info("Updated verified_display cache")
 
     return HTMLResponse(content=html_content)
-    
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
@@ -413,11 +431,11 @@ async def forward_proxy_request(
     st = time.perf_counter()
     # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
     if 1==2:
-        if not await check_hotkey_stake(metagraph_cache, x_hotkey, 100):  # Minimum 100 TAO stake
+        if not await check_hotkey_stake(x_hotkey, 100):  # Minimum 100 TAO stake
             logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
             raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
     if 1==2:
-        if not await check_request_ip(metagraph_cache, x_hotkey, client_ip):
+        if not await check_request_ip(x_hotkey, client_ip):
             logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
@@ -456,7 +474,6 @@ async def forward_proxy_request(
         if response.status_code != 200:
             logger.error(f"Upstream error for request {request_id}: {response.status_code}")
             logger.error(f"Response content: {response.text}")
-            #logger.error(f"{traceback.format_exc()}")
             raise HTTPException(status_code=response.status_code, detail=response.text)
 
         # Core proof (what gets signed - NO time data)
@@ -511,7 +528,6 @@ async def forward_proxy_request(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @app.post("/verify")
 @limiter.limit("60/minute")
 async def verify_endpoint(
@@ -537,168 +553,3 @@ async def verify_endpoint(
             "valid": False,
             "error": "Invalid signature"
         }
-
-
-async def update_metagraph_data(app: FastAPI):
-    """Background task to update metagraph data periodically."""
-    global metagraph_cache, metagraph_cache_timestamp
-    
-    while True:
-        try:
-            logger.info(f"Starting metagraph refresh. Active threads: {threading.active_count()}")
-            result = await get_metagraph_data()
-            
-            if result is not None:
-                # Store old cache for cleanup
-                old_cache = metagraph_cache
-                
-                # Update with new data
-                metagraph_cache = result
-                metagraph_cache_timestamp = time.time()
-                app.state.last_updated = datetime.now(timezone.utc)
-                
-                # Clean up old cache
-                if old_cache is not None:
-                    old_cache.clear()
-                    del old_cache
-                
-                # Force garbage collection
-                gc.collect()
-                logger.info(f"Metagraph updated successfully. Active threads: {threading.active_count()}")
-            else:
-                logger.warning("Failed to fetch metagraph data, keeping existing cache")
-        
-        except Exception as e:
-            logger.error(f"Error in update_metagraph_data: {e}")
-            logger.error(traceback.format_exc())
-        
-        # Wait before next refresh
-        logger.info(f"Sleeping for {CACHE_DURATION} seconds. Active threads: {threading.active_count()}")
-        await asyncio.sleep(CACHE_DURATION)
-
-
-async def get_metagraph_data() -> dict:
-    """Get the metagraph data with cache."""
-    global metagraph_cache, metagraph_cache_timestamp
-
-    # Check if we have cached data and it's still valid
-    current_time = time.time()
-    if (metagraph_cache is not None and
-        metagraph_cache_timestamp is not None and
-        (current_time - metagraph_cache_timestamp) < CACHE_DURATION):
-        logger.info("Returning cached metagraph data")
-        return metagraph_cache
-    
-    substrate = None
-    try:        
-        network = BT_NETWORK
-        netuid = BT_NETUID
-        if not network or netuid is None:
-            raise ValueError("BT_NETWORK or BT_NETUID environment variables not set")
-
-        logger.info(f'Fetching fresh metagraph data for {network}:{netuid}...')
-        logger.info(f'Active threads before fetch: {threading.active_count()}')
-        
-        # Create substrate connection
-        substrate = interface.get_substrate(subtensor_network=network)
-        
-        # Fetch nodes
-        nodes = get_nodes_for_netuid(substrate=substrate, netuid=netuid)
-        
-        # Get block info
-        head = substrate.get_block()
-        block_number = head['header']['number']
-        
-        # Build data structure
-        data = {
-            'uids': [],
-            'network_info': {
-                'netuid': netuid,
-                'network': network,
-                'block': block_number,
-                'total_neurons': len(nodes),
-                'timestamp': datetime.now().isoformat()
-            },
-            'aggregated_stats': {}
-        }
-        
-        neurons = []
-        for node in nodes:
-            neurons.append({
-                'uid': node.node_id,
-                'hotkey': node.hotkey,
-                'stake': node.stake,
-                'axon_ip': node.ip,
-                'axon_port': node.port
-            })  
-             
-        data['uids'] = neurons
-        total_neurons = len(data['uids'])
-        data['aggregated_stats'] = {
-            'total_neurons': total_neurons
-        }        
-        
-        logger.info(f'Successfully processed {total_neurons} neurons from block {block_number}')
-        
-        metagraph_result = {
-            'uids': data['uids'],
-            'by_hotkey': {neuron['hotkey']: neuron for neuron in data['uids']},
-            'by_ip': {neuron['axon_ip']: neuron for neuron in data['uids']},
-            'network_info': data['network_info'],
-            'aggregated_stats': data['aggregated_stats']
-        }
-
-        # Update cache
-        metagraph_cache = metagraph_result
-        metagraph_cache_timestamp = time.time()
-        
-        return metagraph_result
-        
-    except Exception as e:
-        logger.error(f'Error fetching metagraph data: {e}')
-        logger.error(f'Traceback: {traceback.format_exc()}')
-        return None
-    
-    finally:
-        # CRITICAL: Clean up substrate connection
-        if substrate is not None:
-            try:
-                # Close websocket connection
-                if hasattr(substrate, 'close'):
-                    substrate.close()
-                    logger.info("Closed substrate connection")
-                
-                    
-                del substrate
-                
-            except Exception as e:
-                logger.error(f"Error during substrate cleanup: {e}")
-        
-        # Force garbage collection
-        collected = gc.collect()
-        logger.info(f"Garbage collected {collected} objects after metagraph fetch")
-        logger.info(f'Active threads after cleanup: {threading.active_count()}')
-
-
-
-async def check_hotkey_stake(
-    metagraph: dict,
-    hotkey: str,
-    stake: float
-) -> bool:
-    """Check if hotkey has stake in the metagraph."""
-    if metagraph is None or hotkey is None or stake is None:
-        return False
-    neuron = metagraph['by_hotkey'].get(hotkey)
-    return neuron['stake'] > stake if neuron else False
-
-async def check_request_ip(
-    metagraph: dict,
-    hotkey: str,
-    request_ip: str,
-) -> bool:
-    """Check if request IP matches hotkey's axon IP."""
-    if metagraph is None or hotkey is None or request_ip is None:
-        return False
-    neuron = metagraph['by_hotkey'].get(hotkey)
-    return neuron['axon_ip'] == request_ip if neuron else False
