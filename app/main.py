@@ -476,17 +476,7 @@ async def get_metagraph_data() -> dict:
                     substrate.close()
                     logger.info("Closed substrate connection")
                 
-                # # Close any websocket connections in the substrate object
-                # if hasattr(substrate, 'websocket') and substrate.websocket:
-                #     try:
-                #         substrate.websocket.close()
-                #     except Exception as e:
-                #         logger.warning(f"Error closing websocket: {e}")
-                
-                # Clear internal state
-                # if hasattr(substrate, '__dict__'):
-                #     substrate.__dict__.clear()
-                
+                    
                 del substrate
                 
             except Exception as e:
