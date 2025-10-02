@@ -190,3 +190,5 @@ __pycache__/
 # UV
 #uv.lock
 
+/data/*.*
+*.json

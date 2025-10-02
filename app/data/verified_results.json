@@ -334,5 +334,54 @@
         "ttl": "2025-10-01T19:33:07.714542+00:00",
         "row_hash": "0b8a80853f42e4b26f3e70cf3149919fa4dbbe74e58f1db5fcd2211875356e60",
         "request_id": "f541fb5a-20eb-4e53-a235-c2a3073838a4"
+    },
+    {
+        "response": {
+            "id": "gen-1759367622-ufoZzQc2xaYySvKd0oQT",
+            "provider": "OpenAI",
+            "model": "openai/gpt-4o-mini",
+            "object": "chat.completion",
+            "created": 1759367622,
+            "choices": [
+                {
+                    "logprobs": null,
+                    "finish_reason": "stop",
+                    "native_finish_reason": "stop",
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! I'm just a computer program, so I don't have feelings, but I'm here and ready to help you. How can I assist you today?",
+                        "refusal": null,
+                        "reasoning": null
+                    }
+                }
+            ],
+            "system_fingerprint": "fp_560af6e559",
+            "usage": {
+                "prompt_tokens": 13,
+                "completion_tokens": 30,
+                "total_tokens": 43,
+                "prompt_tokens_details": {
+                    "cached_tokens": 0,
+                    "audio_tokens": 0
+                },
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0
+                }
+            }
+        },
+        "proof": {
+            "request_hash": "d23c84e52da70e66c055a7b623c532de94da47b2bd842a01ca2656a900cf9fb6",
+            "response_hash": "59b543cfe53c2af39951b7c3bed64de277fffe26e8353a7b2579a552be777ce4",
+            "hotkey": "12442114z3535353353535",
+            "model": "gpt-4o-mini",
+            "provider": "OPEN_ROUTER",
+            "unique_id": "b31f9bdc-d507-4cf9-92ed-4debe08fd690"
+        },
+        "signature": "I6wgTUyJWQid/TfQQ7DP/U7mj6rqe4ky42LcpIJesJ0IXnVpJpt+GrnWP+tUahWXDmUhxvZAMjoNLQWso3IqDw==",
+        "timestamp": "2025-10-02T01:13:40.147732+00:00",
+        "ttl": "2025-10-02T01:18:40.147741+00:00",
+        "row_hash": "55523a9277fa832e655ef8ce95db98e2f2ec4d0c33ce63ef3b1ae2d92e4c7b38",
+        "request_id": "b31f9bdc-d507-4cf9-92ed-4debe08fd690"
     }
 ]

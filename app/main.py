@@ -120,7 +120,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/health")
-@limiter.limit("180/minute")
+@limiter.limit("60/minute")
 async def health(request: Request):
     node_count = len(metagraph_cache['uids']) if metagraph_cache else 0  # Use metagraph_cache
     updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
@@ -383,8 +383,8 @@ async def get_metagraph_data() -> dict:
             raise ValueError("BT_NETWORK or BT_NETUID environment variables not set")
 
         logger.info(f'Fetching fresh metagraph data for {network}:{netuid}...')
-        subnet = bt.metagraph(netuid=netuid, network=network)
-
+        subnet = bt.metagraph(netuid=netuid, network=network, lite=True)
+        
         # Extract all relevant data from metagraph
         data = {
             'uids': [],
