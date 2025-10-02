@@ -194,3 +194,4 @@ __pycache__/
 *.json
 
 app/data/*.*
+/app/data/*.*
