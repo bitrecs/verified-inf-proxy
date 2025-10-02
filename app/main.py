@@ -45,9 +45,7 @@ verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 300  # 5 minutes
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
-# Global substrate connection (reuse instead of recreating)
-global_substrate = None
-substrate_lock = asyncio.Lock()
+
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "test")
 BT_NETUID = int(os.environ.get("BT_NETUID", 296))
@@ -80,48 +78,6 @@ def get_client_ip(request: Request) -> str:
     if request.client:
         return str(request.client.host)
     return get_remote_address(request)  # Fallback to slowapi's method
-
-
-async def get_or_create_substrate():
-    """Get or create a reusable substrate connection."""
-    global global_substrate
-    
-    async with substrate_lock:
-        if global_substrate is None:
-            logger.info("Creating new substrate connection")
-            network = BT_NETWORK
-            loop = asyncio.get_event_loop()
-            global_substrate = await loop.run_in_executor(
-                None,
-                lambda: interface.get_substrate(subtensor_network=network)
-            )
-            logger.info(f"Substrate connection created. Active threads: {threading.active_count()}")
-        else:
-            # Check if connection is still alive
-            try:
-                # Try a simple query to verify connection
-                await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: global_substrate.get_block()
-                )
-                logger.info("Reusing existing substrate connection")
-            except Exception as e:
-                logger.warning(f"Existing substrate connection failed: {e}, creating new one")
-                # Close old connection
-                try:
-                    if hasattr(global_substrate, 'close'):
-                        global_substrate.close()
-                except Exception:
-                    pass
-                
-                # Create new connection
-                loop = asyncio.get_event_loop()
-                global_substrate = await loop.run_in_executor(
-                    None,
-                    lambda: interface.get_substrate(subtensor_network=BT_NETWORK)
-                )
-        
-        return global_substrate
 
 
 async def get_metagraph_data() -> dict:
@@ -221,28 +177,35 @@ async def get_metagraph_data() -> dict:
         if substrate is not None:
             try:
                 logger.info("Closing substrate connection")
-                if hasattr(substrate, 'close'):
-                    substrate.close()
                 
-                # Close websocket if it exists
+                # Close websocket first if it exists (before calling substrate.close())
                 if hasattr(substrate, 'websocket') and substrate.websocket:
                     try:
                         substrate.websocket.close()
-                    except Exception:
-                        pass
+                        logger.info("Closed websocket")
+                    except Exception as e:
+                        logger.warning(f"Error closing websocket: {e}")
                 
-                # Clear internal state
-                if hasattr(substrate, '__dict__'):
-                    substrate.__dict__.clear()
+                # Now close the substrate interface (this may try to access self.ws in __del__)
+                if hasattr(substrate, 'close'):
+                    try:
+                        substrate.close()
+                        logger.info("Closed substrate interface")
+                    except Exception as e:
+                        logger.warning(f"Error closing substrate interface: {e}")
                 
-                del substrate
+                # Don't clear __dict__ - let Python's garbage collector handle it naturally
+                # This prevents the AttributeError in __del__
                 
             except Exception as e:
-                logger.error(f"Error closing substrate: {e}")
+                logger.error(f"Error during substrate cleanup: {e}")
+            finally:
+                # Set to None to allow garbage collection
+                substrate = None
         
         # Aggressive garbage collection
         for _ in range(3):
-            collected = gc.collect()
+            gc.collect()
         
         logger.info(f"Garbage collected objects after metagraph fetch")
         logger.info(f'Active threads after fetch: {threading.active_count()}')
@@ -255,24 +218,33 @@ async def update_metagraph_data(app: FastAPI):
     while True:
         try:
             logger.info(f"Starting metagraph refresh. Active threads: {threading.active_count()}")
+            
+            # Store reference to old cache BEFORE fetching new data
+            old_cache = metagraph_cache
+            old_timestamp = metagraph_cache_timestamp
+            
+            # Fetch new data
             result = await get_metagraph_data()
             
             if result is not None:
-                # Store old cache for cleanup
-                old_cache = metagraph_cache
-                
-                # Update with new data
-                metagraph_cache = result
-                metagraph_cache_timestamp = time.time()
+                # get_metagraph_data() already updated the globals, but let's be explicit
                 app.state.last_updated = datetime.now(timezone.utc)
                 
-                # Clean up old cache
-                if old_cache is not None:
-                    old_cache.clear()
-                    del old_cache
+                # Clean up old cache (now it's actually different from metagraph_cache)
+                if old_cache is not None and old_cache is not metagraph_cache:
+                    try:
+                        old_cache.clear()
+                        del old_cache
+                    except Exception as e:
+                        logger.warning(f"Error clearing old cache: {e}")
+                
+                if old_timestamp is not None:
+                    del old_timestamp
                 
                 # Force garbage collection
-                gc.collect()
+                for _ in range(2):
+                    gc.collect()
+                    
                 logger.info(f"Metagraph updated successfully. Active threads: {threading.active_count()}")
             else:
                 logger.warning("Failed to fetch metagraph data, keeping existing cache")
@@ -448,11 +420,11 @@ async def forward_proxy_request(
     st = time.perf_counter()
     # First make sure hotkey has stake in the metagraph, and the request ip matches that hotkey's axon ip
     if 1==2:
-        if not await check_hotkey_stake(x_hotkey, 100):  # Minimum 100 TAO stake
+        if not await check_hotkey_stake(metagraph_cache, x_hotkey, 100):  # Pass metagraph_cache
             logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
             raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
     if 1==2:
-        if not await check_request_ip(x_hotkey, client_ip):
+        if not await check_request_ip(metagraph_cache, x_hotkey, client_ip):  # Pass metagraph_cache
             logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
@@ -551,11 +523,10 @@ async def verify_endpoint(
     request: Request,
     response: SignedResponse
 ) -> Dict[str, Union[bool, str]]:
-    try:
-        public_key : Ed25519PublicKey = serialization.load_pem_public_key(PUBLIC_KEY)
-        public_key.verify(
+    try:        
+        PUBLIC_KEY.verify(
             base64.b64decode(response.signature), 
-            json.dumps(response.proof).encode()
+            json.dumps(response.proof, sort_keys=True).encode()
         )
         return {
             "valid": True,
