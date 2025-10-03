@@ -106,28 +106,44 @@ def metagraph_background_worker():
             logger.info("Starting metagraph sync")
             logger.info(f'Active threads: {threading.active_count()}')
             
-            # Create fresh metagraph (this auto-syncs on init)
+            # Create fresh metagraph with substrate
+            substrate = interface.get_substrate(subtensor_network=network)
             new_metagraph = Metagraph(
                 netuid=netuid,
-                substrate=interface.get_substrate(subtensor_network=network)
+                substrate=substrate,
+                load_old_nodes=False  # Don't load from cache - force fresh sync
             )
             
-            logger.info(f'Synced {len(new_metagraph.nodes)} neurons')
+            # Force sync from chain (not cache)
+            new_metagraph.sync_nodes()
             
-            # Swap in new metagraph and shutdown old one
-            with metagraph_lock:
-                old_metagraph = metagraph
-                metagraph = new_metagraph
+            logger.info(f'Synced {len(new_metagraph.nodes)} neurons from chain')
             
-            # Shutdown old metagraph outside the lock
-            if old_metagraph is not None:
+            # Only update global metagraph if we actually got nodes
+            if len(new_metagraph.nodes) > 0:
+                # Swap in new metagraph and shutdown old one
+                with metagraph_lock:
+                    old_metagraph = metagraph
+                    metagraph = new_metagraph
+                
+                # Shutdown old metagraph outside the lock
+                if old_metagraph is not None:
+                    try:
+                        old_metagraph.shutdown()
+                        del old_metagraph
+                    except Exception as e:
+                        logger.error(f"Error shutting down old metagraph: {e}")
+                
+                gc.collect()
+            else:
+                logger.error("Sync returned 0 nodes! Keeping old metagraph and retrying...")
+                # Clean up the failed metagraph
                 try:
-                    old_metagraph.shutdown()
-                    del old_metagraph
+                    new_metagraph.shutdown()
+                    del new_metagraph
                 except Exception as e:
-                    logger.error(f"Error shutting down old metagraph: {e}")
+                    logger.error(f"Error cleaning up failed metagraph: {e}")
             
-            gc.collect()
             logger.info(f'Active threads after sync: {threading.active_count()}')
             
         except Exception as e:
