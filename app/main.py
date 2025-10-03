@@ -315,11 +315,11 @@ async def forward_proxy_request(
         raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
     
     if 1==2:
-        if not await check_hotkey_stake(metagraph_cache, x_hotkey, 100):
+        if not await check_hotkey_stake(x_hotkey, 100):
             logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
             raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
     if 1==2:
-        if not await check_request_ip(metagraph_cache, x_hotkey, client_ip):
+        if not await check_request_ip(x_hotkey, client_ip):
             logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
             raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
     
