@@ -27,38 +27,36 @@ async def test_stake_and_ip_checks():
     # Test that basic functionality works - find any hotkey with stake > 0
     has_high_stake = False
     test_hotkey = None
-    for node in metagraph.nodes:
+    # metagraph.nodes is a dict where keys are hotkeys, values are node objects
+    for hotkey, node in metagraph.nodes.items():
         if node.stake > 100:
             has_high_stake = True
-            test_hotkey = node.hotkey
+            test_hotkey = hotkey
             break
 
     # Test low stake hotkey
     low_stake_hotkey = None
-    for node in metagraph.nodes:
+    for hotkey, node in metagraph.nodes.items():
         if node.stake < 10:
-            low_stake_hotkey = node.hotkey
+            low_stake_hotkey = hotkey
             break
 
     if low_stake_hotkey:
-        # Removed metagraph parameter
         assert(not await check_hotkey_stake(low_stake_hotkey, 100))
 
     if has_high_stake and test_hotkey:
-        # Removed metagraph parameter
         assert(await check_hotkey_stake(test_hotkey, 100))
 
     # Test IP matching - find a hotkey with valid IP
     test_ip_hotkey = None
     test_ip = None
-    for node in metagraph.nodes:
+    for hotkey, node in metagraph.nodes.items():
         if node.ip and node.ip != '':
-            test_ip_hotkey = node.hotkey
+            test_ip_hotkey = hotkey
             test_ip = node.ip
             break
 
     if test_ip_hotkey and test_ip:
-        # Removed metagraph parameter
         assert(await check_request_ip(test_ip_hotkey, test_ip))
         assert(not await check_request_ip(test_ip_hotkey, "1.2.3.4"))
 

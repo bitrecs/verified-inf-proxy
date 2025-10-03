@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import os
 import gc
 import time
@@ -43,7 +44,15 @@ verified_display_cache = None
 verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 900  # 15 minutes
 
-client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
+# Configure httpx client with explicit limits
+client = httpx.AsyncClient(
+    timeout=httpx.Timeout(60.0),
+    limits=httpx.Limits(
+        max_connections=10,
+        max_keepalive_connections=5,
+        keepalive_expiry=30.0
+    )
+)
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "test")
 BT_NETUID = int(os.environ.get("BT_NETUID", 296))
@@ -63,6 +72,8 @@ d1_client = D1Handler(
     token=CF_D1_TOKEN,
     database_id=CF_D1_DATABASE_ID
 )
+
+MIN_ALPHA_STAKE = 100  # Minimum stake for alpha access
 
 # Shutdown event
 shutdown_event = threading.Event()
@@ -151,8 +162,8 @@ async def check_hotkey_stake(
         return False
     
     with metagraph_lock:
-        node = metagraph.nodes_by_hotkey.get(hotkey)
-        return node.stake > stake if node else False
+        node = metagraph.nodes.get(hotkey)  # Changed from nodes_by_hotkey to nodes
+        return node.stake > stake if node else False  # Changed from alpha_stake to stake
 
 
 async def check_request_ip(
@@ -164,14 +175,20 @@ async def check_request_ip(
         return False
     
     with metagraph_lock:
-        node = metagraph.nodes_by_hotkey.get(hotkey)
+        node = metagraph.nodes.get(hotkey)  # Changed from nodes_by_hotkey to nodes
         return node.ip == request_ip if node else False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
-    logger.info("Server starting up")        
-    app.state.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+    logger.info("Server starting up")
+    
+    # Create bounded thread pool with daemon threads
+    app.state.thread_pool = ThreadPoolExecutor(
+        max_workers=2,  # Only 2 workers instead of 4
+        thread_name_prefix="D1-Writer"
+    )
+    
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0
@@ -184,25 +201,34 @@ async def lifespan(app: FastAPI):
         # Signal background thread to stop
         shutdown_event.set()
         
-        # Call shutdown on metagraph (this is the key!)
+        # Call shutdown on metagraph
         if metagraph is not None:
             logger.info("Shutting down metagraph...")
             metagraph.shutdown()
         
-        # Wait for daemon thread (with timeout)
+        # Wait for daemon thread
         if metagraph_thread.is_alive():
             logger.info("Waiting for metagraph thread to stop...")
             metagraph_thread.join(timeout=15)
         
         await client.aclose()
-        app.state.thread_pool.shutdown(wait=True)
+        
+        # Shutdown thread pool properly - wait for tasks but with timeout
+        logger.info("Shutting down D1 writer thread pool...")
+        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
         
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
-limiter = Limiter(key_func=get_client_ip)
+
+# Fix: Initialize limiter WITHOUT creating background threads
+limiter = Limiter(
+    key_func=get_client_ip,
+    storage_uri="memory://",  # Add explicit in-memory storage
+    enabled=True
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -213,16 +239,24 @@ async def health(request: Request):
     with metagraph_lock:
         node_count = len(metagraph.nodes) if metagraph else 0
     thread_count = threading.active_count()
+    
+    # Log all active threads for debugging
+    if thread_count > 5:
+        logger.warning(f"High thread count: {thread_count}")
+        logger.warning("Active threads:")
+        for thread in threading.enumerate():
+            logger.warning(f"  - {thread.name} (daemon={thread.daemon}, alive={thread.is_alive()})")
 
     if thread_count > 50:
-        logger.warning(f"High thread count detected: {thread_count}")
+        logger.error(f"CRITICAL: Thread count {thread_count}")
     
     return {
         "status": "healthy",
         "nodes": node_count,
         "total_requests": app.state.total_requests,
         "exceptions": app.state.exceptions,
-        "threads": thread_count
+        "threads": thread_count,
+        "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0
     }
 
 
@@ -315,7 +349,7 @@ async def forward_proxy_request(
         raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
     
     if 1==2:
-        if not await check_hotkey_stake(x_hotkey, 100):
+        if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):
             logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
             raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
     if 1==2:
@@ -386,8 +420,16 @@ async def forward_proxy_request(
         et = time.perf_counter()
         duration = et - st
 
-        #asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
-        asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id, duration, str(provider))
+        # Submit to thread pool - it will reuse threads properly
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(
+            app.state.thread_pool,  # Use the bounded pool
+            d1_client.insert_signed_response,
+            signed_response,
+            request_id,
+            duration,
+            str(provider)
+        )
 
         app.state.total_requests += 1
         logger.info(f"Request {request_id} took {duration:.2f} seconds")

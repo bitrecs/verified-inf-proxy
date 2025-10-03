@@ -28,6 +28,7 @@ async def call_proxy(
         )
         return response.json()
 
+@pytest.mark.skip(reason="Cerebras key not available in CI")
 @pytest.mark.asyncio
 async def test_call_proxy():
     request = {
