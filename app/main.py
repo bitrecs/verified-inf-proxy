@@ -240,7 +240,7 @@ async def health(request: Request):
     thread_count = threading.active_count()
     
     # Log all active threads for debugging
-    if thread_count > 5:
+    if thread_count > 10:
         logger.warning(f"High thread count: {thread_count}")
         logger.warning("Active threads:")
         for thread in threading.enumerate():
@@ -270,31 +270,31 @@ async def get_public_key(request: Request):
     return JSONResponse(status_code=200, content={"public_key": public_key_hex})
 
 
-@app.get("/verified_log")
-@limiter.limit("30/minute")
-async def verified_log(request: Request):
-    ts = str(int(time.time()))
-    request_ip = get_client_ip(request)
-    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
-    try:
-        recs = await read_verified_from_file() or []
-        recs_dicts = [r.model_dump() for r in recs][:5_000]
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": "Hello from Verified Inf Proxy",
-                "ts": str(ts),
-                "network": BT_NETWORK,
-                "netuid": BT_NETUID,
-                "verified": recs_dicts
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error in /verified_log endpoint: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+# @app.get("/verified_log")
+# @limiter.limit("30/minute")
+# async def verified_log(request: Request):
+#     ts = str(int(time.time()))
+#     request_ip = get_client_ip(request)
+#     logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
+#     try:
+#         recs = await read_verified_from_file() or []
+#         recs_dicts = [r.model_dump() for r in recs][:5_000]
+#         return JSONResponse(
+#             status_code=200,
+#             content={
+#                 "message": "Hello from Verified Inf Proxy",
+#                 "ts": str(ts),
+#                 "network": BT_NETWORK,
+#                 "netuid": BT_NETUID,
+#                 "verified": recs_dicts
+#             }
+#         )
+#     except Exception as e:
+#         logger.error(f"Error in /verified_log endpoint: {str(e)}")
+#         return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
 
 
-@app.get("/verified_display")
+@app.get("/log")
 @limiter.limit("30/minute")
 async def verified_display(request: Request):
     global verified_display_cache, verified_display_cache_timestamp
@@ -308,24 +308,21 @@ async def verified_display(request: Request):
     if (verified_display_cache is not None and
         verified_display_cache_timestamp is not None and
         (current_time - verified_display_cache_timestamp) < VERIFIED_DISPLAY_CACHE_DURATION):
-        logger.info("Returning cached verified_display HTML")
+        #logger.info("Returning cached verified_display HTML")
         return HTMLResponse(content=verified_display_cache)
     
     # Fetch fresh data
     verified = await d1_client.select_all_signed_responses(top=100)
-    print(f"Fetched {len(verified)} verified records from D1")
-
+    #print(f"Fetched {len(verified)} verified records from D1")
     html_content = HTMLTemplates.render_verified_display(
         verified=verified,
         bt_network=BT_NETWORK,
         bt_netuid=BT_NETUID
     )
-    
     # Update cache
     verified_display_cache = html_content
     verified_display_cache_timestamp = current_time
     logger.info("Updated verified_display cache")
-
     return HTMLResponse(content=html_content)
 
 

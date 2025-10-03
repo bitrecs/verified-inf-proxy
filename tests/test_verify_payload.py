@@ -56,7 +56,7 @@ def verify_signature(
     print(f"Signature (base64): {signature_b64}")
 
     signature_bytes = base64.b64decode(signature_b64)
-    serialized_proof = json.dumps(proof, sort_keys=True).encode()  # Added sort_keys=True
+    serialized_proof = json.dumps(proof, sort_keys=True).encode()
 
     try:
         public_key.verify(signature_bytes, serialized_proof)
