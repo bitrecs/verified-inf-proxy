@@ -38,11 +38,12 @@ logger = logging.getLogger(__name__)
 
 metagraph_cache = None
 metagraph_cache_timestamp = None
-METAGRAPH_CACHE_DURATION = 600 # 10 minutes
+metagraph_lock = threading.Lock()
+METAGRAPH_CACHE_DURATION = 600  # 10 minutes
 
 verified_display_cache = None
 verified_display_cache_timestamp = None
-VERIFIED_DISPLAY_CACHE_DURATION = 900 # 15 minutes
+VERIFIED_DISPLAY_CACHE_DURATION = 900  # 15 minutes
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(60.0))
 
@@ -65,6 +66,9 @@ d1_client = D1Handler(
     database_id=CF_D1_DATABASE_ID
 )
 
+# Shutdown event
+shutdown_event = threading.Event()
+
 
 def get_client_ip(request: Request) -> str:    
     if "x-real-ip" in request.headers:
@@ -76,44 +80,28 @@ def get_client_ip(request: Request) -> str:
             return ips[0]
     if request.client:
         return str(request.client.host)
-    return get_remote_address(request)  # Fallback to slowapi's method
+    return get_remote_address(request)
 
 
-async def get_metagraph_data() -> dict:
-    """Get the metagraph data with cache."""
+def fetch_metagraph_sync():
+    """Synchronous metagraph fetch - runs in background thread."""
     global metagraph_cache, metagraph_cache_timestamp
-
-    # Check if we have cached data and it's still valid
-    current_time = time.time()
-    if (metagraph_cache is not None and
-        metagraph_cache_timestamp is not None and
-        (current_time - metagraph_cache_timestamp) < METAGRAPH_CACHE_DURATION):
-        logger.info("Returning cached metagraph data")
-        return metagraph_cache
-
+    
     substrate = None
-    try:        
+    try:
         network = BT_NETWORK
         netuid = BT_NETUID
-        if not network or netuid is None:
-            raise ValueError("BT_NETWORK or BT_NETUID environment variables not set")
-
-        logger.info(f'Fetching fresh metagraph data for {network}:{netuid}...')
-        logger.info(f'Active threads before fetch: {threading.active_count()}')
         
-        # Create a fresh substrate connection for this fetch, then close it
-        loop = asyncio.get_event_loop()
-        substrate = await loop.run_in_executor(
-            None,
-            lambda: interface.get_substrate(subtensor_network=network)
-        )        
-        # Fetch nodes in executor to avoid blocking
-        nodes = await loop.run_in_executor(
-            None,
-            lambda: get_nodes_for_netuid(substrate=substrate, netuid=netuid)
-        )
+        logger.info(f'Fetching metagraph for {network}:{netuid}...')
+        logger.info(f'Active threads: {threading.active_count()}')
         
-        # CRITICAL: Convert to primitive types immediately and release node objects
+        # Create substrate
+        substrate = interface.get_substrate(subtensor_network=network)
+        
+        # Fetch nodes
+        nodes = get_nodes_for_netuid(substrate=substrate, netuid=netuid)
+        
+        # Convert to primitives immediately
         neurons = []
         for node in nodes:
             neurons.append({
@@ -124,19 +112,20 @@ async def get_metagraph_data() -> dict:
                 'axon_port': int(node.port)
             })
         
-        # Clear the nodes list immediately to release fiber objects
+        # Clear nodes
         del nodes
         
-        # Get block info
-        head = await loop.run_in_executor(
-            None,
-            lambda: substrate.get_block()
-        )
+        # Get block
+        head = substrate.get_block()
         block_number = head['header']['number']
         
-        # Build data structure using already-converted neurons
-        data = {
-            'uids': neurons,  # Already converted above
+        logger.info(f'Processed {len(neurons)} neurons from block {block_number}')
+        
+        # Build result
+        result = {
+            'uids': neurons,
+            'by_hotkey': {n['hotkey']: n for n in neurons},
+            'by_ip': {n['axon_ip']: n for n in neurons if n['axon_ip']},
             'network_info': {
                 'netuid': netuid,
                 'network': network,
@@ -149,109 +138,65 @@ async def get_metagraph_data() -> dict:
             }
         }
         
-        logger.info(f'Successfully processed {len(neurons)} neurons from block {block_number}')
+        # Thread-safe cache update
+        with metagraph_lock:
+            old_cache = metagraph_cache
+            metagraph_cache = result
+            metagraph_cache_timestamp = time.time()
+            
+            # Clear old cache
+            if old_cache:
+                old_cache.clear()
+                del old_cache
         
-        # Build indexes directly from neurons
-        metagraph_result = {
-            'uids': data['uids'],
-            'by_hotkey': {neuron['hotkey']: neuron for neuron in data['uids']},
-            'by_ip': {neuron['axon_ip']: neuron for neuron in data['uids'] if neuron['axon_ip']},
-            'network_info': data['network_info'],
-            'aggregated_stats': data['aggregated_stats']
-        }
-
-        # Update cache
-        metagraph_cache = metagraph_result
-        metagraph_cache_timestamp = time.time()
-        
-        return metagraph_result
+        return True
         
     except Exception as e:
-        logger.error(f'Error fetching metagraph data: {e}')
-        logger.error(f'Traceback: {traceback.format_exc()}')
-        return None
+        logger.error(f'Error fetching metagraph: {e}')
+        logger.error(traceback.format_exc())
+        return False
     
     finally:
-        # CRITICAL: Always close substrate connection after use
-        if substrate is not None:
+        # Cleanup
+        if substrate:
             try:
-                logger.info("Closing substrate connection")
-                
-                # Close websocket first if it exists (before calling substrate.close())
                 if hasattr(substrate, 'websocket') and substrate.websocket:
-                    try:
-                        substrate.websocket.close()
-                        logger.info("Closed websocket")
-                    except Exception as e:
-                        logger.warning(f"Error closing websocket: {e}")
-                
-                # Now close the substrate interface (this may try to access self.ws in __del__)
+                    substrate.websocket.close()
                 if hasattr(substrate, 'close'):
-                    try:
-                        substrate.close()
-                        logger.info("Closed substrate interface")
-                    except Exception as e:
-                        logger.warning(f"Error closing substrate interface: {e}")
-                
+                    substrate.close()
+                del substrate
             except Exception as e:
-                logger.error(f"Error during substrate cleanup: {e}")
-            finally:
-                # Set to None to allow garbage collection
-                substrate = None
-
-        # Aggressive garbage collection
-        for _ in range(3):
-            gc.collect()
+                logger.error(f"Cleanup error: {e}")
         
-        logger.info(f"Garbage collected objects after metagraph fetch")
+        gc.collect()
         logger.info(f'Active threads after fetch: {threading.active_count()}')
 
 
-async def update_metagraph_data(app: FastAPI):
-    """Background task to update metagraph data periodically."""
-    global metagraph_cache, metagraph_cache_timestamp
+def metagraph_background_worker():
+    """Background thread worker - pure synchronous."""
+    logger.info("Metagraph worker started")
     
-    while True:
-        try:
-            logger.info(f"Starting metagraph refresh. Active threads: {threading.active_count()}")
-            
-            # Store reference to old cache BEFORE fetching new data
-            old_cache = metagraph_cache
-            old_timestamp = metagraph_cache_timestamp
-            
-            # Fetch new data
-            result = await get_metagraph_data()
-            
-            if result is not None:
-                # get_metagraph_data() already updated the globals, but let's be explicit
-                app.state.last_updated = datetime.now(timezone.utc)
-                
-                # Clean up old cache (now it's actually different from metagraph_cache)
-                if old_cache is not None and old_cache is not metagraph_cache:
-                    try:
-                        old_cache.clear()
-                        del old_cache
-                    except Exception as e:
-                        logger.warning(f"Error clearing old cache: {e}")
-                
-                if old_timestamp is not None:
-                    del old_timestamp
-                
-                # Force garbage collection
-                for _ in range(2):
-                    gc.collect()
-                    
-                logger.info(f"Metagraph updated successfully. Active threads: {threading.active_count()}")
-            else:
-                logger.warning("Failed to fetch metagraph data, keeping existing cache")
+    # Initial fetch
+    fetch_metagraph_sync()
+    
+    # Loop with shutdown check
+    while not shutdown_event.is_set():
+        # Sleep in small chunks to allow quick shutdown
+        for _ in range(60):  # 60 * 10 = 600 seconds = 10 minutes
+            if shutdown_event.is_set():
+                break
+            time.sleep(10)
         
-        except Exception as e:
-            logger.error(f"Error in update_metagraph_data: {e}")
-            logger.error(traceback.format_exc())
-        
-        # Wait before next refresh
-        logger.info(f"Sleeping for {METAGRAPH_CACHE_DURATION} seconds. Active threads: {threading.active_count()}")
-        await asyncio.sleep(METAGRAPH_CACHE_DURATION)
+        if not shutdown_event.is_set():
+            logger.info("Starting scheduled metagraph refresh")
+            fetch_metagraph_sync()
+    
+    logger.info("Metagraph worker stopped")
+
+
+# Start background thread
+metagraph_thread = threading.Thread(target=metagraph_background_worker, daemon=False, name="MetagraphWorker")
+metagraph_thread.start()
 
 
 async def check_hotkey_stake(
@@ -262,8 +207,9 @@ async def check_hotkey_stake(
     """Check if hotkey has stake in the metagraph."""
     if metagraph is None or hotkey is None or stake is None:
         return False
-    neuron = metagraph['by_hotkey'].get(hotkey)
-    return neuron['stake'] > stake if neuron else False
+    with metagraph_lock:
+        neuron = metagraph['by_hotkey'].get(hotkey)
+        return neuron['stake'] > stake if neuron else False
 
 
 async def check_request_ip(
@@ -274,8 +220,9 @@ async def check_request_ip(
     """Check if request IP matches hotkey's axon IP."""
     if metagraph is None or hotkey is None or request_ip is None:
         return False
-    neuron = metagraph['by_hotkey'].get(hotkey)
-    return neuron['axon_ip'] == request_ip if neuron else False
+    with metagraph_lock:
+        neuron = metagraph['by_hotkey'].get(hotkey)
+        return neuron['axon_ip'] == request_ip if neuron else False
 
 
 @asynccontextmanager
@@ -286,29 +233,24 @@ async def lifespan(app: FastAPI):
     app.state.total_requests = 0
     app.state.exceptions = 0
     
-    logger.info("Creating metagraph data task")
-    loaded_metagraph = asyncio.create_task(update_metagraph_data(app))
     try:
         yield
     finally:
-        logger.info("Starting shutdown cleanup...")
-        # Cancel background tasks
-        loaded_metagraph.cancel()        
-        await asyncio.gather(loaded_metagraph, return_exceptions=True)
+        logger.info("Starting shutdown...")
+        
+        # Signal background thread to stop
+        shutdown_event.set()
+        
+        # Wait for background thread
+        if metagraph_thread.is_alive():
+            logger.info("Waiting for metagraph thread to stop...")
+            metagraph_thread.join(timeout=15)
+            if metagraph_thread.is_alive():
+                logger.warning("Metagraph thread did not stop gracefully")
         
         await client.aclose()
         app.state.thread_pool.shutdown(wait=True)
         
-        # Wait for threads to settle
-        for i in range(10):
-            active_threads = threading.active_count()
-            if active_threads <= 1:
-                logger.info(f"All threads terminated successfully")
-                break
-            logger.warning(f"Waiting for {active_threads} threads to terminate... (attempt {i+1}/10)")
-            await asyncio.sleep(1)
-        
-        # Final cleanup
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
@@ -322,8 +264,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.get("/health")
 @limiter.limit("60/minute")
 async def health(request: Request):
-    node_count = len(metagraph_cache['uids']) if metagraph_cache else 0
-    updated = app.state.last_updated.isoformat() if app.state.last_updated else "never"
+    with metagraph_lock:
+        node_count = len(metagraph_cache['uids']) if metagraph_cache else 0
     thread_count = threading.active_count()
 
     if thread_count > 50:
@@ -332,7 +274,7 @@ async def health(request: Request):
     return {
         "status": "healthy",
         "nodes": node_count,
-        "last_updated": updated,
+        "last_updated": datetime.fromtimestamp(metagraph_cache_timestamp).isoformat() if metagraph_cache_timestamp else "never",
         "total_requests": app.state.total_requests,
         "exceptions": app.state.exceptions,
         "threads": thread_count
@@ -499,7 +441,7 @@ async def forward_proxy_request(
         et = time.perf_counter()
         duration = et - st
 
-        asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
+        #asyncio.create_task(write_verified_to_file(request_id, [signed_response]))
         asyncio.get_event_loop().run_in_executor(app.state.thread_pool, d1_client.insert_signed_response, signed_response, request_id, duration, str(provider))
 
         app.state.total_requests += 1
