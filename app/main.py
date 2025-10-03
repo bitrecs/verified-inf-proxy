@@ -16,7 +16,7 @@ load_dotenv()
 
 from app.llm_providers import LLMProvider
 from app.models import ChatCompletionRequest, SignedResponse
-from app.utils import read_verified_from_file, write_verified_to_file
+from app.utils import read_verified_from_file
 from app.d1 import D1Handler
 from app.html_templates import HTMLTemplates
 from contextlib import asynccontextmanager
@@ -27,17 +27,15 @@ from fastapi import FastAPI, Request, Header, HTTPException
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.hazmat.primitives import serialization
 from fiber.chain import interface
-from fiber.chain.fetch_nodes import get_nodes_for_netuid
+from fiber.chain.metagraph import Metagraph  # Use fiber's Metagraph class
 
-logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
-metagraph_cache = None
-metagraph_cache_timestamp = None
+# Use fiber's Metagraph instead of manual management
+metagraph: Metagraph = None
 metagraph_lock = threading.Lock()
 METAGRAPH_CACHE_DURATION = 600  # 10 minutes
 
@@ -83,146 +81,91 @@ def get_client_ip(request: Request) -> str:
     return get_remote_address(request)
 
 
-def fetch_metagraph_sync():
-    """Synchronous metagraph fetch - runs in background thread."""
-    global metagraph_cache, metagraph_cache_timestamp
-    
-    substrate = None
-    try:
-        network = BT_NETWORK
-        netuid = BT_NETUID
-        
-        logger.info(f'Fetching metagraph for {network}:{netuid}...')
-        logger.info(f'Active threads: {threading.active_count()}')
-        
-        # Create substrate
-        substrate = interface.get_substrate(subtensor_network=network)
-        
-        # Fetch nodes
-        nodes = get_nodes_for_netuid(substrate=substrate, netuid=netuid)
-        
-        # Convert to primitives immediately
-        neurons = []
-        for node in nodes:
-            neurons.append({
-                'uid': int(node.node_id),
-                'hotkey': str(node.hotkey),
-                'stake': float(node.stake),
-                'axon_ip': str(node.ip),
-                'axon_port': int(node.port)
-            })
-        
-        # Clear nodes
-        del nodes
-        
-        # Get block
-        head = substrate.get_block()
-        block_number = head['header']['number']
-        
-        logger.info(f'Processed {len(neurons)} neurons from block {block_number}')
-        
-        # Build result
-        result = {
-            'uids': neurons,
-            'by_hotkey': {n['hotkey']: n for n in neurons},
-            'by_ip': {n['axon_ip']: n for n in neurons if n['axon_ip']},
-            'network_info': {
-                'netuid': netuid,
-                'network': network,
-                'block': block_number,
-                'total_neurons': len(neurons),
-                'timestamp': datetime.now().isoformat()
-            },
-            'aggregated_stats': {
-                'total_neurons': len(neurons)
-            }
-        }
-        
-        # Thread-safe cache update
-        with metagraph_lock:
-            old_cache = metagraph_cache
-            metagraph_cache = result
-            metagraph_cache_timestamp = time.time()
-            
-            # Clear old cache
-            if old_cache:
-                old_cache.clear()
-                del old_cache
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f'Error fetching metagraph: {e}')
-        logger.error(traceback.format_exc())
-        return False
-    
-    finally:
-        # Cleanup
-        if substrate:
-            try:
-                if hasattr(substrate, 'websocket') and substrate.websocket:
-                    substrate.websocket.close()
-                if hasattr(substrate, 'close'):
-                    substrate.close()
-                del substrate
-            except Exception as e:
-                logger.error(f"Cleanup error: {e}")
-        
-        gc.collect()
-        logger.info(f'Active threads after fetch: {threading.active_count()}')
-
-
 def metagraph_background_worker():
-    """Background thread worker - pure synchronous."""
+    """Background thread worker using fiber's Metagraph."""
+    global metagraph
+    
     logger.info("Metagraph worker started")
     
-    # Initial fetch
-    fetch_metagraph_sync()
+    network = BT_NETWORK
+    netuid = BT_NETUID
     
-    # Loop with shutdown check
-    while not shutdown_event.is_set():
-        # Sleep in small chunks to allow quick shutdown
-        for _ in range(60):  # 60 * 10 = 600 seconds = 10 minutes
-            if shutdown_event.is_set():
-                break
-            time.sleep(10)
+    try:
+        # Create substrate connection first
+        substrate = interface.get_substrate(subtensor_network=network)
         
-        if not shutdown_event.is_set():
-            logger.info("Starting scheduled metagraph refresh")
-            fetch_metagraph_sync()
+        # Create metagraph with substrate
+        with metagraph_lock:
+            metagraph = Metagraph(
+                netuid=netuid,
+                substrate=substrate  # Pass substrate instead of network
+            )
+        
+        logger.info("Initial metagraph sync...")
+        metagraph.sync_nodes()
+        logger.info(f'Initial sync complete: {len(metagraph.nodes)} neurons')
+        
+        # Periodic sync loop
+        while not shutdown_event.is_set():
+            # Sleep in chunks for quick shutdown
+            for _ in range(METAGRAPH_CACHE_DURATION // 10):
+                if shutdown_event.is_set():
+                    break
+                time.sleep(10)
+            
+            if not shutdown_event.is_set():
+                logger.info("Starting scheduled metagraph sync")
+                logger.info(f'Active threads: {threading.active_count()}')
+                
+                try:
+                    metagraph.sync_nodes()
+                    logger.info(f'Synced {len(metagraph.nodes)} neurons')
+                except Exception as e:
+                    logger.error(f"Error syncing metagraph: {e}")
+                    logger.error(traceback.format_exc())
+                
+                logger.info(f'Active threads after sync: {threading.active_count()}')
+        
+    except Exception as e:
+        logger.error(f"Fatal error in metagraph worker: {e}")
+        logger.error(traceback.format_exc())
     
     logger.info("Metagraph worker stopped")
 
 
-# Start background thread
-metagraph_thread = threading.Thread(target=metagraph_background_worker, daemon=False, name="MetagraphWorker")
+# Start background thread as daemon (like fiber does)
+metagraph_thread = threading.Thread(
+    target=metagraph_background_worker, 
+    daemon=True,  # Changed to daemon=True
+    name="MetagraphWorker"
+)
 metagraph_thread.start()
 
 
 async def check_hotkey_stake(
-    metagraph: dict,
     hotkey: str,
     stake: float
 ) -> bool:
     """Check if hotkey has stake in the metagraph."""
     if metagraph is None or hotkey is None or stake is None:
         return False
+    
     with metagraph_lock:
-        neuron = metagraph['by_hotkey'].get(hotkey)
-        return neuron['stake'] > stake if neuron else False
+        node = metagraph.nodes_by_hotkey.get(hotkey)
+        return node.stake > stake if node else False
 
 
 async def check_request_ip(
-    metagraph: dict,
     hotkey: str,
     request_ip: str,
 ) -> bool:
     """Check if request IP matches hotkey's axon IP."""
     if metagraph is None or hotkey is None or request_ip is None:
         return False
+    
     with metagraph_lock:
-        neuron = metagraph['by_hotkey'].get(hotkey)
-        return neuron['axon_ip'] == request_ip if neuron else False
+        node = metagraph.nodes_by_hotkey.get(hotkey)
+        return node.ip == request_ip if node else False
 
 
 @asynccontextmanager
@@ -241,12 +184,15 @@ async def lifespan(app: FastAPI):
         # Signal background thread to stop
         shutdown_event.set()
         
-        # Wait for background thread
+        # Call shutdown on metagraph (this is the key!)
+        if metagraph is not None:
+            logger.info("Shutting down metagraph...")
+            metagraph.shutdown()
+        
+        # Wait for daemon thread (with timeout)
         if metagraph_thread.is_alive():
             logger.info("Waiting for metagraph thread to stop...")
             metagraph_thread.join(timeout=15)
-            if metagraph_thread.is_alive():
-                logger.warning("Metagraph thread did not stop gracefully")
         
         await client.aclose()
         app.state.thread_pool.shutdown(wait=True)
@@ -265,7 +211,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @limiter.limit("60/minute")
 async def health(request: Request):
     with metagraph_lock:
-        node_count = len(metagraph_cache['uids']) if metagraph_cache else 0
+        node_count = len(metagraph.nodes) if metagraph else 0
     thread_count = threading.active_count()
 
     if thread_count > 50:
@@ -274,7 +220,6 @@ async def health(request: Request):
     return {
         "status": "healthy",
         "nodes": node_count,
-        "last_updated": datetime.fromtimestamp(metagraph_cache_timestamp).isoformat() if metagraph_cache_timestamp else "never",
         "total_requests": app.state.total_requests,
         "exceptions": app.state.exceptions,
         "threads": thread_count
