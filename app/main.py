@@ -93,7 +93,7 @@ def get_client_ip(request: Request) -> str:
 
 
 def metagraph_background_worker():
-    """Background thread worker using fiber's Metagraph."""
+    """Background thread worker - recreate metagraph each sync to avoid leaks."""
     global metagraph
     
     logger.info("Metagraph worker started")
@@ -101,45 +101,44 @@ def metagraph_background_worker():
     network = BT_NETWORK
     netuid = BT_NETUID
     
-    try:
-        # Create substrate connection first
-        substrate = interface.get_substrate(subtensor_network=network)
-        
-        # Create metagraph with substrate
-        with metagraph_lock:
-            metagraph = Metagraph(
-                netuid=netuid,
-                substrate=substrate  # Pass substrate instead of network
-            )
-        
-        logger.info("Initial metagraph sync...")
-        metagraph.sync_nodes()
-        logger.info(f'Initial sync complete: {len(metagraph.nodes)} neurons')
-        
-        # Periodic sync loop
-        while not shutdown_event.is_set():
-            # Sleep in chunks for quick shutdown
-            for _ in range(METAGRAPH_CACHE_DURATION // 10):
-                if shutdown_event.is_set():
-                    break
-                time.sleep(10)
+    while not shutdown_event.is_set():
+        try:
+            logger.info("Starting metagraph sync")
+            logger.info(f'Active threads: {threading.active_count()}')
             
-            if not shutdown_event.is_set():
-                logger.info("Starting scheduled metagraph sync")
-                logger.info(f'Active threads: {threading.active_count()}')
-                
+            # Create fresh metagraph (this auto-syncs on init)
+            new_metagraph = Metagraph(
+                netuid=netuid,
+                substrate=interface.get_substrate(subtensor_network=network)
+            )
+            
+            logger.info(f'Synced {len(new_metagraph.nodes)} neurons')
+            
+            # Swap in new metagraph and shutdown old one
+            with metagraph_lock:
+                old_metagraph = metagraph
+                metagraph = new_metagraph
+            
+            # Shutdown old metagraph outside the lock
+            if old_metagraph is not None:
                 try:
-                    metagraph.sync_nodes()
-                    logger.info(f'Synced {len(metagraph.nodes)} neurons')
+                    old_metagraph.shutdown()
+                    del old_metagraph
                 except Exception as e:
-                    logger.error(f"Error syncing metagraph: {e}")
-                    logger.error(traceback.format_exc())
-                
-                logger.info(f'Active threads after sync: {threading.active_count()}')
+                    logger.error(f"Error shutting down old metagraph: {e}")
+            
+            gc.collect()
+            logger.info(f'Active threads after sync: {threading.active_count()}')
+            
+        except Exception as e:
+            logger.error(f"Error in metagraph sync: {e}")
+            logger.error(traceback.format_exc())
         
-    except Exception as e:
-        logger.error(f"Fatal error in metagraph worker: {e}")
-        logger.error(traceback.format_exc())
+        # Sleep in chunks for quick shutdown
+        for _ in range(METAGRAPH_CACHE_DURATION // 10):
+            if shutdown_event.is_set():
+                break
+            time.sleep(10)
     
     logger.info("Metagraph worker stopped")
 
