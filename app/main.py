@@ -239,17 +239,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 
 # Fix: Initialize limiter WITHOUT creating background threads
-limiter = Limiter(
-    key_func=get_client_ip,
-    storage_uri="memory://",  # Add explicit in-memory storage
-    enabled=True
-)
-app.state.limiter = limiter
+# limiter = Limiter(
+#     key_func=get_client_ip,
+#     storage_uri="memory://",  # Add explicit in-memory storage
+#     enabled=True
+# )
+# app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/health")
-@limiter.limit("60/minute")
+#@limiter.limit("60/minute")
 async def health(request: Request):
     with metagraph_lock:
         node_count = len(metagraph.nodes) if metagraph else 0
@@ -276,7 +276,7 @@ async def health(request: Request):
 
 
 @app.get("/public_key")
-@limiter.limit("180/minute")
+#@limiter.limit("180/minute")
 async def get_public_key(request: Request):
     public_key_raw_bytes = PUBLIC_KEY.public_bytes(
         encoding=Encoding.Raw,
@@ -311,7 +311,7 @@ async def get_public_key(request: Request):
 
 
 @app.get("/log")
-@limiter.limit("30/minute")
+#@limiter.limit("30/minute")
 async def verified_display(request: Request):
     global verified_display_cache, verified_display_cache_timestamp
     
@@ -343,7 +343,7 @@ async def verified_display(request: Request):
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
-@limiter.limit("60/minute")
+#@limiter.limit("60/minute")
 async def forward_proxy_request(
     request: Request,
     completion_request: ChatCompletionRequest,
@@ -465,7 +465,7 @@ async def forward_proxy_request(
 
 
 @app.post("/verify")
-@limiter.limit("60/minute")
+#@limiter.limit("60/minute")
 async def verify_endpoint(
     request: Request,
     response: SignedResponse
