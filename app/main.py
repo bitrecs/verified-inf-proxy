@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server starting up")
     
     app.state.thread_pool = ThreadPoolExecutor(
-        max_workers=2,
+        max_workers=1,
         thread_name_prefix="D1-Writer"
     )
     
