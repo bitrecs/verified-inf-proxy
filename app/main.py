@@ -8,7 +8,6 @@ import base64
 import httpx
 import asyncio
 import logging
-import traceback
 import threading
 from dotenv import load_dotenv
 load_dotenv()
@@ -20,27 +19,18 @@ from app.d1 import D1Handler
 from app.html_templates import HTMLTemplates
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse, HTMLResponse
-from typing import Union, Dict, Any
+from typing import Union, Dict
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from fiber.chain import interface
-from fiber.chain.metagraph import Metagraph
-
+from app.metagraph_sync_manager import MetagraphSyncManager
 
 rate_limit_store = defaultdict(list)
 rate_limit_lock = threading.Lock()
 
-
 logger = logging.getLogger(__name__)
 
-# snapshot of latest metagraph data
-metagraph_snapshot = {
-    "nodes": {},          # hotkey -> {"stake": float, "ip": str}
-    "synced_at": None     # unix timestamp
-}
-metagraph_lock = threading.Lock()
 METAGRAPH_CACHE_DURATION = 600  # 10 minutes
 
 verified_display_cache = None
@@ -76,9 +66,12 @@ d1_client = D1Handler(
     database_id=CF_D1_DATABASE_ID
 )
 
-# Shutdown event
-shutdown_event = threading.Event()
-
+# Initialize MetagraphSyncManager
+metagraph_manager = MetagraphSyncManager(
+    network=BT_NETWORK,
+    netuid=BT_NETUID,
+    sync_interval=METAGRAPH_CACHE_DURATION
+)
 
 def get_client_ip(request: Request) -> str:    
     if "x-real-ip" in request.headers:
@@ -90,123 +83,25 @@ def get_client_ip(request: Request) -> str:
             return ips[0]
     if request.client:
         return str(request.client.host)
-    # REMOVE get_remote_address (from SlowAPI) and use fallback
     return "unknown"
-
 
 def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
     """Simple in-memory rate limiter without background threads."""
     now = time.time()
     
     with rate_limit_lock:
-        # Clean old entries older than the window
         if key in rate_limit_store:
             rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window]
         else:
             rate_limit_store[key] = []
         
-        # Check if we're under the limit
         current_count = len(rate_limit_store[key])
         
         if current_count >= limit:
-            # Rate limit exceeded
             return False
         
-        # Allow the request and record timestamp
         rate_limit_store[key].append(now)
         return True
-
-
-def _stake_to_float(value: Any) -> float:
-    """Best-effort conversion of stake value to float."""
-    if value is None:
-        return 0.0
-    if isinstance(value, (int, float)):
-        return float(value)
-    if hasattr(value, "tao"):
-        try:
-            return float(value.tao)
-        except Exception:
-            pass
-    try:
-        return float(value)
-    except Exception:
-        return 0.0
-
-
-def _extract_ip(node: Any) -> str:
-    """Extract IP address from a metagraph node object."""
-    ip = getattr(node, "ip", None)
-    if not ip:
-        axon = getattr(node, "axon_info", None)
-        if axon:
-            ip = getattr(axon, "ip", None)
-    return ip or ""
-
-
-def metagraph_background_worker():
-    """Background thread worker – fetch snapshot and cleanly close connections."""
-    global metagraph_snapshot
-
-    logger.info("Metagraph worker started")
-
-    network = BT_NETWORK
-    netuid = BT_NETUID
-
-    while not shutdown_event.is_set():
-        substrate = None
-        tmp_metagraph = None
-        try:
-            logger.info("Opening substrate connection")
-            substrate = interface.get_substrate(subtensor_network=network)
-            tmp_metagraph = Metagraph(
-                netuid=netuid,
-                substrate=substrate,
-                load_old_nodes=False
-            )
-            tmp_metagraph.sync_nodes()
-            nodes_snapshot = {}
-            for hotkey, node in tmp_metagraph.nodes.items():
-                nodes_snapshot[hotkey] = {
-                    "stake": _stake_to_float(getattr(node, "stake", None)),
-                    "ip": _extract_ip(node)
-                }
-            with metagraph_lock:
-                metagraph_snapshot["nodes"] = nodes_snapshot
-                metagraph_snapshot["synced_at"] = time.time()
-            logger.info(f"Synced {len(nodes_snapshot)} neurons")
-        except Exception as e:
-            logger.error(f"Metagraph sync failed: {e}")
-            logger.error(traceback.format_exc())
-        finally:
-            if tmp_metagraph is not None:
-                try:
-                    tmp_metagraph.shutdown()
-                except Exception as e:
-                    logger.warning(f"Error shutting down metagraph: {e}")
-            if substrate is not None:
-                try:
-                    substrate.close()
-                    logger.info("Closed substrate connection")
-                except Exception as e:
-                    logger.warning(f"Error closing substrate: {e}")
-
-        for _ in range(METAGRAPH_CACHE_DURATION // 10):
-            if shutdown_event.is_set():
-                break
-            time.sleep(10)
-
-    logger.info("Metagraph worker stopped")
-
-
-# Metagraph Syncer
-metagraph_thread = threading.Thread(
-    target=metagraph_background_worker, 
-    daemon=True,
-    name="MetagraphWorker"
-)
-metagraph_thread.start()
-
 
 async def check_hotkey_stake(
     hotkey: str,
@@ -214,11 +109,9 @@ async def check_hotkey_stake(
 ) -> bool:
     if hotkey is None or stake is None:
         return False
-
-    with metagraph_lock:
-        node = metagraph_snapshot["nodes"].get(hotkey)
-        return node["stake"] > stake if node else False
-
+    snapshot, _ = metagraph_manager.get_snapshot()
+    node = snapshot.get(hotkey)
+    return node["stake"] > stake if node else False
 
 async def check_request_ip(
     hotkey: str,
@@ -226,19 +119,16 @@ async def check_request_ip(
 ) -> bool:
     if hotkey is None or request_ip is None:
         return False
-
-    with metagraph_lock:
-        node = metagraph_snapshot["nodes"].get(hotkey)
-        return node["ip"] == request_ip if node else False
-
+    snapshot, _ = metagraph_manager.get_snapshot()
+    node = snapshot.get(hotkey)
+    return node["ip"] == request_ip if node else False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
     logger.info("Server starting up")
     
-    # Create bounded thread pool with daemon threads
     app.state.thread_pool = ThreadPoolExecutor(
-        max_workers=2,  # Only 2 workers instead of 4
+        max_workers=2,
         thread_name_prefix="D1-Writer"
     )
     
@@ -246,28 +136,24 @@ async def lifespan(app: FastAPI):
     app.state.total_requests = 0
     app.state.exceptions = 0
     
+    # Start the metagraph manager
+    metagraph_manager.start()
+    
     try:
         yield
     finally:
         logger.info("Starting shutdown...")
         
-        # Signal background thread to stop
-        shutdown_event.set()
-
-        # Wait for daemon thread
-        if metagraph_thread.is_alive():
-            logger.info("Waiting for metagraph thread to stop...")
-            metagraph_thread.join(timeout=15)
+        # Stop metagraph manager
+        metagraph_manager.stop()
         
         await client.aclose()
         
-        # Shutdown thread pool properly - wait for tasks but with timeout
         logger.info("Shutting down D1 writer thread pool...")
         app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
         
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
-
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 
@@ -277,11 +163,10 @@ async def health(request: Request):
     if not check_rate_limit(f"health:{client_ip}", limit=60):
         raise HTTPException(429, "Rate limit exceeded")
     
-    with metagraph_lock:
-        node_count = len(metagraph_snapshot["nodes"]) if metagraph_snapshot else 0
+    snapshot, synced_at = metagraph_manager.get_snapshot()
+    node_count = len(snapshot)
     thread_count = threading.active_count()
     
-    # Log all active threads for debugging
     if thread_count > 10:
         logger.warning(f"High thread count: {thread_count}")
         logger.warning("Active threads:")
