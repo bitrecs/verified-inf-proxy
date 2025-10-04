@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:8000")
-# BASE_URL = "https://verified.bitrecs.ai"
+#BASE_URL = "https://verified.bitrecs.ai"
 
 
 def check_server_running() -> bool:

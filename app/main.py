@@ -13,6 +13,7 @@ import traceback
 import threading
 from dotenv import load_dotenv
 load_dotenv()
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from app.llm_providers import LLMProvider
 from app.models import ChatCompletionRequest, SignedResponse
@@ -23,10 +24,6 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from typing import Union, Dict
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
-
-# Simple in-memory rate limiter without threads
-from collections import defaultdict
-
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fiber.chain import interface
@@ -36,27 +33,6 @@ from fiber.chain.metagraph import Metagraph
 rate_limit_store = defaultdict(list)
 rate_limit_lock = threading.Lock()
 
-def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
-    """Simple in-memory rate limiter without background threads."""
-    now = time.time()
-    
-    with rate_limit_lock:
-        # Clean old entries older than the window
-        if key in rate_limit_store:
-            rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window]
-        else:
-            rate_limit_store[key] = []
-        
-        # Check if we're under the limit
-        current_count = len(rate_limit_store[key])
-        
-        if current_count >= limit:
-            # Rate limit exceeded
-            return False
-        
-        # Allow the request and record timestamp
-        rate_limit_store[key].append(now)
-        return True
 
 logger = logging.getLogger(__name__)
 
@@ -115,15 +91,36 @@ def get_client_ip(request: Request) -> str:
     return "unknown"
 
 
+def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
+    """Simple in-memory rate limiter without background threads."""
+    now = time.time()
+    
+    with rate_limit_lock:
+        # Clean old entries older than the window
+        if key in rate_limit_store:
+            rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window]
+        else:
+            rate_limit_store[key] = []
+        
+        # Check if we're under the limit
+        current_count = len(rate_limit_store[key])
+        
+        if current_count >= limit:
+            # Rate limit exceeded
+            return False
+        
+        # Allow the request and record timestamp
+        rate_limit_store[key].append(now)
+        return True
+
+
 def metagraph_background_worker():
     """Background thread worker - single metagraph instance."""
-    global metagraph
-    
+    global metagraph    
     logger.info("Metagraph worker started")
     
     network = BT_NETWORK
-    netuid = BT_NETUID
-    
+    netuid = BT_NETUID    
     try:
         # Create substrate and metagraph ONCE
         substrate = interface.get_substrate(subtensor_network=network)
@@ -166,10 +163,10 @@ def metagraph_background_worker():
     logger.info("Metagraph worker stopped")
 
 
-# Start background thread as daemon (like fiber does)
+# Metagraph Syncer
 metagraph_thread = threading.Thread(
     target=metagraph_background_worker, 
-    daemon=True,  # Changed to daemon=True
+    daemon=True,
     name="MetagraphWorker"
 )
 metagraph_thread.start()
@@ -289,41 +286,17 @@ async def get_public_key(request: Request):
     return JSONResponse(status_code=200, content={"public_key": public_key_hex})
 
 
-# @app.get("/verified_log")
-# @limiter.limit("30/minute")
-# async def verified_log(request: Request):
-#     ts = str(int(time.time()))
-#     request_ip = get_client_ip(request)
-#     logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
-#     try:
-#         recs = await read_verified_from_file() or []
-#         recs_dicts = [r.model_dump() for r in recs][:5_000]
-#         return JSONResponse(
-#             status_code=200,
-#             content={
-#                 "message": "Hello from Verified Inf Proxy",
-#                 "ts": str(ts),
-#                 "network": BT_NETWORK,
-#                 "netuid": BT_NETUID,
-#                 "verified": recs_dicts
-#             }
-#         )
-#     except Exception as e:
-#         logger.error(f"Error in /verified_log endpoint: {str(e)}")
-#         return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
-
-
 @app.get("/log")
-async def verified_display(request: Request):
+async def verified_log(request: Request):
     client_ip = get_client_ip(request)
-    if not check_rate_limit(f"verified_display:{client_ip}", limit=30):
+    if not check_rate_limit(f"verified_log:{client_ip}", limit=60):
         raise HTTPException(429, "Rate limit exceeded")
     
     global verified_display_cache, verified_display_cache_timestamp
     
     ts = str(int(time.time()))
     request_ip = get_client_ip(request)
-    logger.info(f"verified_display endpoint accessed from IP {request_ip} at {ts}")
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
     
     # Check if we have cached HTML and it's still valid
     current_time = time.time()
@@ -344,7 +317,7 @@ async def verified_display(request: Request):
     # Update cache
     verified_display_cache = html_content
     verified_display_cache_timestamp = current_time
-    logger.info("Updated verified_display cache")
+    logger.info("Updated verified_log cache")
     return HTMLResponse(content=html_content)
 
 
@@ -360,8 +333,7 @@ async def forward_proxy_request(
     if not check_rate_limit(f"chat:{client_ip}", limit=60):
         raise HTTPException(429, "Rate limit exceeded")
     
-    request_id = str(uuid.uuid4())    
-    client_ip = get_client_ip(request)
+    request_id = str(uuid.uuid4())
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
     
@@ -479,7 +451,7 @@ async def verify_endpoint(
     response: SignedResponse
 ) -> Dict[str, Union[bool, str]]:
     client_ip = get_client_ip(request)
-    if not check_rate_limit(f"verify:{client_ip}", limit=60):
+    if not check_rate_limit(f"verify:{client_ip}", limit=120):
         raise HTTPException(429, "Rate limit exceeded")
     
     try:        
