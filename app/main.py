@@ -1,4 +1,3 @@
-
 import os
 import gc
 import time
@@ -21,7 +20,7 @@ from app.d1 import D1Handler
 from app.html_templates import HTMLTemplates
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse, HTMLResponse
-from typing import Union, Dict
+from typing import Union, Dict, Any
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -36,7 +35,11 @@ rate_limit_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
 
-metagraph: Metagraph = None
+# snapshot of latest metagraph data
+metagraph_snapshot = {
+    "nodes": {},          # hotkey -> {"stake": float, "ip": str}
+    "synced_at": None     # unix timestamp
+}
 metagraph_lock = threading.Lock()
 METAGRAPH_CACHE_DURATION = 600  # 10 minutes
 
@@ -114,52 +117,85 @@ def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
         return True
 
 
-def metagraph_background_worker():
-    """Background thread worker - single metagraph instance."""
-    global metagraph    
-    logger.info("Metagraph worker started")
-    
-    network = BT_NETWORK
-    netuid = BT_NETUID    
+def _stake_to_float(value: Any) -> float:
+    """Best-effort conversion of stake value to float."""
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    if hasattr(value, "tao"):
+        try:
+            return float(value.tao)
+        except Exception:
+            pass
     try:
-        # Create substrate and metagraph ONCE
-        substrate = interface.get_substrate(subtensor_network=network)
-        with metagraph_lock:
-            metagraph = Metagraph(
+        return float(value)
+    except Exception:
+        return 0.0
+
+
+def _extract_ip(node: Any) -> str:
+    """Extract IP address from a metagraph node object."""
+    ip = getattr(node, "ip", None)
+    if not ip:
+        axon = getattr(node, "axon_info", None)
+        if axon:
+            ip = getattr(axon, "ip", None)
+    return ip or ""
+
+
+def metagraph_background_worker():
+    """Background thread worker – fetch snapshot and cleanly close connections."""
+    global metagraph_snapshot
+
+    logger.info("Metagraph worker started")
+
+    network = BT_NETWORK
+    netuid = BT_NETUID
+
+    while not shutdown_event.is_set():
+        substrate = None
+        tmp_metagraph = None
+        try:
+            logger.info("Opening substrate connection")
+            substrate = interface.get_substrate(subtensor_network=network)
+            tmp_metagraph = Metagraph(
                 netuid=netuid,
                 substrate=substrate,
                 load_old_nodes=False
             )
-        
-        logger.info("Initial metagraph sync...")
-        metagraph.sync_nodes()
-        logger.info(f'Initial sync complete: {len(metagraph.nodes)} neurons')
-        
-        # Periodic sync loop - just call sync_nodes, don't recreate
-        while not shutdown_event.is_set():
-            # Sleep in chunks for quick shutdown
-            for _ in range(METAGRAPH_CACHE_DURATION // 10):
-                if shutdown_event.is_set():
-                    break
-                time.sleep(10)
-            
-            if not shutdown_event.is_set():
-                logger.info("Starting scheduled metagraph sync")
-                logger.info(f'Active threads: {threading.active_count()}')
-                
+            tmp_metagraph.sync_nodes()
+            nodes_snapshot = {}
+            for hotkey, node in tmp_metagraph.nodes.items():
+                nodes_snapshot[hotkey] = {
+                    "stake": _stake_to_float(getattr(node, "stake", None)),
+                    "ip": _extract_ip(node)
+                }
+            with metagraph_lock:
+                metagraph_snapshot["nodes"] = nodes_snapshot
+                metagraph_snapshot["synced_at"] = time.time()
+            logger.info(f"Synced {len(nodes_snapshot)} neurons")
+        except Exception as e:
+            logger.error(f"Metagraph sync failed: {e}")
+            logger.error(traceback.format_exc())
+        finally:
+            if tmp_metagraph is not None:
                 try:
-                    metagraph.sync_nodes()
-                    logger.info(f'Synced {len(metagraph.nodes)} neurons')
+                    tmp_metagraph.shutdown()
                 except Exception as e:
-                    logger.error(f"Error syncing metagraph: {e}")
-                    logger.error(traceback.format_exc())
-                
-                logger.info(f'Active threads after sync: {threading.active_count()}')
-        
-    except Exception as e:
-        logger.error(f"Fatal error in metagraph worker: {e}")
-        logger.error(traceback.format_exc())
-    
+                    logger.warning(f"Error shutting down metagraph: {e}")
+            if substrate is not None:
+                try:
+                    substrate.close()
+                    logger.info("Closed substrate connection")
+                except Exception as e:
+                    logger.warning(f"Error closing substrate: {e}")
+
+        for _ in range(METAGRAPH_CACHE_DURATION // 10):
+            if shutdown_event.is_set():
+                break
+            time.sleep(10)
+
     logger.info("Metagraph worker stopped")
 
 
@@ -176,26 +212,24 @@ async def check_hotkey_stake(
     hotkey: str,
     stake: float
 ) -> bool:
-    """Check if hotkey has stake in the metagraph."""
-    if metagraph is None or hotkey is None or stake is None:
+    if hotkey is None or stake is None:
         return False
-    
+
     with metagraph_lock:
-        node = metagraph.nodes.get(hotkey)  # Changed from nodes_by_hotkey to nodes
-        return node.stake > stake if node else False  # Changed from alpha_stake to stake
+        node = metagraph_snapshot["nodes"].get(hotkey)
+        return node["stake"] > stake if node else False
 
 
 async def check_request_ip(
     hotkey: str,
     request_ip: str,
 ) -> bool:
-    """Check if request IP matches hotkey's axon IP."""
-    if metagraph is None or hotkey is None or request_ip is None:
+    if hotkey is None or request_ip is None:
         return False
-    
+
     with metagraph_lock:
-        node = metagraph.nodes.get(hotkey)  # Changed from nodes_by_hotkey to nodes
-        return node.ip == request_ip if node else False
+        node = metagraph_snapshot["nodes"].get(hotkey)
+        return node["ip"] == request_ip if node else False
 
 
 @asynccontextmanager
@@ -219,12 +253,7 @@ async def lifespan(app: FastAPI):
         
         # Signal background thread to stop
         shutdown_event.set()
-        
-        # Call shutdown on metagraph
-        if metagraph is not None:
-            logger.info("Shutting down metagraph...")
-            metagraph.shutdown()
-        
+
         # Wait for daemon thread
         if metagraph_thread.is_alive():
             logger.info("Waiting for metagraph thread to stop...")
@@ -249,7 +278,7 @@ async def health(request: Request):
         raise HTTPException(429, "Rate limit exceeded")
     
     with metagraph_lock:
-        node_count = len(metagraph.nodes) if metagraph else 0
+        node_count = len(metagraph_snapshot["nodes"]) if metagraph_snapshot else 0
     thread_count = threading.active_count()
     
     # Log all active threads for debugging
