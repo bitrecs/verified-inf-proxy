@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+
 import os
 import gc
 import time
@@ -11,13 +11,11 @@ import asyncio
 import logging
 import traceback
 import threading
-import concurrent
 from dotenv import load_dotenv
 load_dotenv()
-
+from concurrent.futures import ThreadPoolExecutor
 from app.llm_providers import LLMProvider
 from app.models import ChatCompletionRequest, SignedResponse
-from app.utils import read_verified_from_file
 from app.d1 import D1Handler
 from app.html_templates import HTMLTemplates
 from contextlib import asynccontextmanager
@@ -25,17 +23,43 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from typing import Union, Dict
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+
+# Simple in-memory rate limiter without threads
+from collections import defaultdict
+
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fiber.chain import interface
-from fiber.chain.metagraph import Metagraph  # Use fiber's Metagraph class
+from fiber.chain.metagraph import Metagraph
+
+
+rate_limit_store = defaultdict(list)
+rate_limit_lock = threading.Lock()
+
+def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
+    """Simple in-memory rate limiter without background threads."""
+    now = time.time()
+    
+    with rate_limit_lock:
+        # Clean old entries older than the window
+        if key in rate_limit_store:
+            rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window]
+        else:
+            rate_limit_store[key] = []
+        
+        # Check if we're under the limit
+        current_count = len(rate_limit_store[key])
+        
+        if current_count >= limit:
+            # Rate limit exceeded
+            return False
+        
+        # Allow the request and record timestamp
+        rate_limit_store[key].append(now)
+        return True
 
 logger = logging.getLogger(__name__)
 
-# Use fiber's Metagraph instead of manual management
 metagraph: Metagraph = None
 metagraph_lock = threading.Lock()
 METAGRAPH_CACHE_DURATION = 600  # 10 minutes
@@ -44,12 +68,11 @@ verified_display_cache = None
 verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 900  # 15 minutes
 
-# Configure httpx client with explicit limits
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(60.0),
     limits=httpx.Limits(
-        max_connections=10,
-        max_keepalive_connections=5,
+        max_connections=50,
+        max_keepalive_connections=10,
         keepalive_expiry=30.0
     )
 )
@@ -61,6 +84,7 @@ if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
+MIN_ALPHA_STAKE = 100  # Minimum stake for alpha access
 
 CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
 CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN")
@@ -72,8 +96,6 @@ d1_client = D1Handler(
     token=CF_D1_TOKEN,
     database_id=CF_D1_DATABASE_ID
 )
-
-MIN_ALPHA_STAKE = 100  # Minimum stake for alpha access
 
 # Shutdown event
 shutdown_event = threading.Event()
@@ -89,11 +111,12 @@ def get_client_ip(request: Request) -> str:
             return ips[0]
     if request.client:
         return str(request.client.host)
-    return get_remote_address(request)
+    # REMOVE get_remote_address (from SlowAPI) and use fallback
+    return "unknown"
 
 
 def metagraph_background_worker():
-    """Background thread worker - recreate metagraph each sync to avoid leaks."""
+    """Background thread worker - single metagraph instance."""
     global metagraph
     
     logger.info("Metagraph worker started")
@@ -101,60 +124,44 @@ def metagraph_background_worker():
     network = BT_NETWORK
     netuid = BT_NETUID
     
-    while not shutdown_event.is_set():
-        try:
-            logger.info("Starting metagraph sync")
-            logger.info(f'Active threads: {threading.active_count()}')
-            
-            # Create fresh metagraph with substrate
-            substrate = interface.get_substrate(subtensor_network=network)
-            new_metagraph = Metagraph(
+    try:
+        # Create substrate and metagraph ONCE
+        substrate = interface.get_substrate(subtensor_network=network)
+        with metagraph_lock:
+            metagraph = Metagraph(
                 netuid=netuid,
                 substrate=substrate,
-                load_old_nodes=False  # Don't load from cache - force fresh sync
+                load_old_nodes=False
             )
-            
-            # Force sync from chain (not cache)
-            new_metagraph.sync_nodes()
-            
-            logger.info(f'Synced {len(new_metagraph.nodes)} neurons from chain')
-            
-            # Only update global metagraph if we actually got nodes
-            if len(new_metagraph.nodes) > 0:
-                # Swap in new metagraph and shutdown old one
-                with metagraph_lock:
-                    old_metagraph = metagraph
-                    metagraph = new_metagraph
-                
-                # Shutdown old metagraph outside the lock
-                if old_metagraph is not None:
-                    try:
-                        old_metagraph.shutdown()
-                        del old_metagraph
-                    except Exception as e:
-                        logger.error(f"Error shutting down old metagraph: {e}")
-                
-                gc.collect()
-            else:
-                logger.error("Sync returned 0 nodes! Keeping old metagraph and retrying...")
-                # Clean up the failed metagraph
-                try:
-                    new_metagraph.shutdown()
-                    del new_metagraph
-                except Exception as e:
-                    logger.error(f"Error cleaning up failed metagraph: {e}")
-            
-            logger.info(f'Active threads after sync: {threading.active_count()}')
-            
-        except Exception as e:
-            logger.error(f"Error in metagraph sync: {e}")
-            logger.error(traceback.format_exc())
         
-        # Sleep in chunks for quick shutdown
-        for _ in range(METAGRAPH_CACHE_DURATION // 10):
-            if shutdown_event.is_set():
-                break
-            time.sleep(10)
+        logger.info("Initial metagraph sync...")
+        metagraph.sync_nodes()
+        logger.info(f'Initial sync complete: {len(metagraph.nodes)} neurons')
+        
+        # Periodic sync loop - just call sync_nodes, don't recreate
+        while not shutdown_event.is_set():
+            # Sleep in chunks for quick shutdown
+            for _ in range(METAGRAPH_CACHE_DURATION // 10):
+                if shutdown_event.is_set():
+                    break
+                time.sleep(10)
+            
+            if not shutdown_event.is_set():
+                logger.info("Starting scheduled metagraph sync")
+                logger.info(f'Active threads: {threading.active_count()}')
+                
+                try:
+                    metagraph.sync_nodes()
+                    logger.info(f'Synced {len(metagraph.nodes)} neurons')
+                except Exception as e:
+                    logger.error(f"Error syncing metagraph: {e}")
+                    logger.error(traceback.format_exc())
+                
+                logger.info(f'Active threads after sync: {threading.active_count()}')
+        
+    except Exception as e:
+        logger.error(f"Fatal error in metagraph worker: {e}")
+        logger.error(traceback.format_exc())
     
     logger.info("Metagraph worker stopped")
 
@@ -238,19 +245,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 
-# Fix: Initialize limiter WITHOUT creating background threads
-# limiter = Limiter(
-#     key_func=get_client_ip,
-#     storage_uri="memory://",  # Add explicit in-memory storage
-#     enabled=True
-# )
-# app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-
 @app.get("/health")
-#@limiter.limit("60/minute")
 async def health(request: Request):
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(f"health:{client_ip}", limit=60):
+        raise HTTPException(429, "Rate limit exceeded")
+    
     with metagraph_lock:
         node_count = len(metagraph.nodes) if metagraph else 0
     thread_count = threading.active_count()
@@ -276,8 +276,11 @@ async def health(request: Request):
 
 
 @app.get("/public_key")
-#@limiter.limit("180/minute")
 async def get_public_key(request: Request):
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(f"public_key:{client_ip}", limit=180):
+        raise HTTPException(429, "Rate limit exceeded")
+    
     public_key_raw_bytes = PUBLIC_KEY.public_bytes(
         encoding=Encoding.Raw,
         format=PublicFormat.Raw
@@ -311,8 +314,11 @@ async def get_public_key(request: Request):
 
 
 @app.get("/log")
-#@limiter.limit("30/minute")
 async def verified_display(request: Request):
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(f"verified_display:{client_ip}", limit=30):
+        raise HTTPException(429, "Rate limit exceeded")
+    
     global verified_display_cache, verified_display_cache_timestamp
     
     ts = str(int(time.time()))
@@ -343,7 +349,6 @@ async def verified_display(request: Request):
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
-#@limiter.limit("60/minute")
 async def forward_proxy_request(
     request: Request,
     completion_request: ChatCompletionRequest,
@@ -351,6 +356,10 @@ async def forward_proxy_request(
     x_hotkey: str = Header(),
     x_provider: str = Header()
 ) -> SignedResponse:
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(f"chat:{client_ip}", limit=60):
+        raise HTTPException(429, "Rate limit exceeded")
+    
     request_id = str(uuid.uuid4())    
     client_ip = get_client_ip(request)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
@@ -465,11 +474,14 @@ async def forward_proxy_request(
 
 
 @app.post("/verify")
-#@limiter.limit("60/minute")
 async def verify_endpoint(
     request: Request,
     response: SignedResponse
 ) -> Dict[str, Union[bool, str]]:
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(f"verify:{client_ip}", limit=60):
+        raise HTTPException(429, "Rate limit exceeded")
+    
     try:        
         PUBLIC_KEY.verify(
             base64.b64decode(response.signature), 
