@@ -75,14 +75,30 @@ metagraph_manager = MetagraphSyncManager(
     sync_interval=METAGRAPH_CACHE_DURATION
 )
 
+# def get_client_ip(request: Request) -> str:    
+#     if "x-real-ip" in request.headers:
+#         return request.headers["x-real-ip"].strip()
+#     if "x-forwarded-for" in request.headers:
+#         forwarded_for = request.headers["x-forwarded-for"].strip()
+#         ips = [ip.strip() for ip in forwarded_for.split(",")]
+#         if ips:            
+#             return ips[0]
+#     if request.client:
+#         return str(request.client.host)
+#     return "unknown"
+
+
 def get_client_ip(request: Request) -> str:    
+    # Log headers for debugging (remove after testing)
+    logger.info(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, client: {request.client}")
+    
     if "x-real-ip" in request.headers:
         return request.headers["x-real-ip"].strip()
     if "x-forwarded-for" in request.headers:
         forwarded_for = request.headers["x-forwarded-for"].strip()
         ips = [ip.strip() for ip in forwarded_for.split(",")]
         if ips:            
-            return ips[0]
+            return ips[-1]  # Changed: Take the last IP (likely the client IP in DO setups with multiple proxies)
     if request.client:
         return str(request.client.host)
     return "unknown"
