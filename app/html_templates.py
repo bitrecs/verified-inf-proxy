@@ -16,6 +16,7 @@ class HTMLTemplates:
             
             # Parse response_json to extract content
             response_content = 'N/A'
+            miner_url = f"https://dashboard.bitrecs.ai/miner?uid={hotkey}"
             try:
                 response_data = json.loads(item.get('response_json', '{}'))
                 if 'choices' in response_data and response_data['choices']:
@@ -37,7 +38,7 @@ class HTMLTemplates:
             rows_html += f"""
                         <tr>
                             <td data-label="Timestamp" class="timestamp">{timestamp}</td>
-                            <td data-label="Hotkey" class="hotkey">{hotkey}</td>
+                            <td data-label="Hotkey" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{hotkey}</a></td>
                             <td data-label="Model" class="model">{model}</td>
                             <td data-label="Model" class="model">{provider}</td>
                             <td data-label="Response" class="response">{response_content}</td>

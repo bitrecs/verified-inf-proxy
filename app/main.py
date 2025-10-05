@@ -31,6 +31,7 @@ rate_limit_store = defaultdict(list)
 rate_limit_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 METAGRAPH_CACHE_DURATION = 600  # 10 minutes
 
