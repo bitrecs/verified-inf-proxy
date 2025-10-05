@@ -85,6 +85,7 @@ def get_client_ip(request: Request) -> str:
         return str(request.client.host)
     return "unknown"
 
+
 def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
     """Simple in-memory rate limiter without background threads."""
     now = time.time()    
@@ -99,6 +100,7 @@ def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
         rate_limit_store[key].append(now)
         return True
 
+
 async def check_hotkey_stake(
     hotkey: str,
     stake: float
@@ -108,6 +110,7 @@ async def check_hotkey_stake(
     snapshot, _ = metagraph_manager.get_snapshot()
     node = snapshot.get(hotkey)
     return node["stake"] > stake if node else False
+
 
 async def check_request_ip(
     hotkey: str,
@@ -119,39 +122,33 @@ async def check_request_ip(
     node = snapshot.get(hotkey)
     return node["ip"] == request_ip if node else False
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
-    logger.info("Server starting up")
-    
+    logger.info("Server starting up")    
     app.state.thread_pool = ThreadPoolExecutor(
         max_workers=1,
         thread_name_prefix="D1-Writer"
-    )
-    
+    )    
     app.state.last_updated = None
     app.state.total_requests = 0
-    app.state.exceptions = 0
-    
+    app.state.exceptions = 0    
     # Start the metagraph manager
-    metagraph_manager.start()
-    
+    metagraph_manager.start()    
     try:
         yield
     finally:
-        logger.info("Starting shutdown...")
-        
+        logger.info("Starting shutdown...")        
         # Stop metagraph manager
-        metagraph_manager.stop()
-        
-        await client.aclose()
-        
+        metagraph_manager.stop()        
+        await client.aclose()        
         logger.info("Shutting down D1 writer thread pool...")
-        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
-        
+        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)        
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+
 
 @app.get("/health")
 async def health(request: Request):
@@ -162,14 +159,16 @@ async def health(request: Request):
     snapshot, synced_at = metagraph_manager.get_snapshot()
     node_count = len(snapshot)
     thread_count = threading.active_count()
-    
+    message = "OK"
     if thread_count > 10:
+        message = "WARNING: High thread count"
         logger.warning(f"High thread count: {thread_count}")
         logger.warning("Active threads:")
         for thread in threading.enumerate():
             logger.warning(f"  - {thread.name} (daemon={thread.daemon}, alive={thread.is_alive()})")
 
     if thread_count > 50:
+        message = "CRITICAL: Very high thread count"
         logger.error(f"CRITICAL: Thread count {thread_count}")
     
     return {
@@ -179,9 +178,9 @@ async def health(request: Request):
         "exceptions": app.state.exceptions,
         "threads": thread_count,
         "metagraph_last_synced": int(synced_at) if synced_at else None,
-        "metagraph_age_seconds": round(time.time() - synced_at, 2) if synced_at else None,
-        "last_updated": app.state.last_updated,
-        "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0
+        "metagraph_age_seconds": round(time.time() - synced_at, 2) if synced_at else None,        
+        "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0,
+        "message": message
     }
 
 
