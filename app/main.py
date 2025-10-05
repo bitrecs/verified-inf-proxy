@@ -178,8 +178,8 @@ async def health(request: Request):
         "total_requests": app.state.total_requests,
         "exceptions": app.state.exceptions,
         "threads": thread_count,
-        "metagraph_last_synced": synced_at,
-        "metagraph_age_seconds": time.time() - synced_at if synced_at else None,
+        "metagraph_last_synced": int(synced_at) if synced_at else None,
+        "metagraph_age_seconds": round(time.time() - synced_at, 2) if synced_at else None,
         "last_updated": app.state.last_updated,
         "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0
     }
@@ -358,35 +358,6 @@ async def forward_proxy_request(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# @app.post("/verify")
-# async def verify_endpoint(
-#     request: Request,
-#     response: SignedResponse
-# ) -> Dict[str, Union[bool, str]]:
-#     client_ip = get_client_ip(request)
-#     if not check_rate_limit(f"verify:{client_ip}", limit=120):
-#         raise HTTPException(429, "Rate limit exceeded")
-    
-#     try:        
-#         PUBLIC_KEY.verify(
-#             base64.b64decode(response.signature), 
-#             json.dumps(response.proof, sort_keys=True).encode()
-#         )
-#         return {
-#             "valid": True,
-#             "hotkey": response.proof.get("hotkey"),
-#             "timestamp": response.proof.get("timestamp"),
-#             "model": response.proof.get("model"),
-#             "provider": response.proof.get("provider")
-#         }
-#     except Exception as e:
-#         logger.warning(f"Verification failed: {str(e)}")
-#         return {
-#             "valid": False,
-#             "error": "Invalid signature"
-#         }
-
-
 @app.post("/verify")
 async def verify_endpoint(
     request: Request,
@@ -401,12 +372,14 @@ async def verify_endpoint(
             base64.b64decode(response.signature), 
             json.dumps(response.proof, sort_keys=True).encode()
         )
+        logger.info(f"Signature valid for hotkey {response.proof.get('hotkey')}, unique_id {response.proof.get('unique_id')}")
         return {
             "valid": True,
             "hotkey": response.proof.get("hotkey"),
             "timestamp": response.timestamp,  # Use response.timestamp instead of response.proof.get("timestamp")
             "model": response.proof.get("model"),
-            "provider": response.proof.get("provider")
+            "provider": response.proof.get("provider"),
+            "unique_id": response.proof.get("unique_id")
         }
     except Exception as e:
         logger.warning(f"Verification failed: {str(e)}")
