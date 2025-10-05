@@ -9,7 +9,7 @@ import httpx
 import asyncio
 import logging
 import threading
-import tracemalloc  # Add this import for memory tracking
+import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from collections import defaultdict
@@ -142,7 +142,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        logger.info("Starting shutdown...")        
+        logger.info("Starting shutdown...")
         # Stop metagraph manager
         metagraph_manager.stop()        
         await client.aclose()        
@@ -159,7 +159,7 @@ async def health(request: Request):
     client_ip = get_client_ip(request)
     if not check_rate_limit(f"health:{client_ip}", limit=60):
         raise HTTPException(429, "Rate limit exceeded")
-    
+  
     snapshot, synced_at = metagraph_manager.get_snapshot()
     node_count = len(snapshot)
     thread_count = threading.active_count()
@@ -261,21 +261,26 @@ async def forward_proxy_request(
     request_id = str(uuid.uuid4())
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
+
+    snapshot, _ = metagraph_manager.get_snapshot()
+    if not snapshot:
+        logger.error(f"Metagraph snapshot is empty for request {request_id}")
+        raise HTTPException(503, "Service unavailable: Metagraph data not ready")
     
     if not authorization or not authorization.startswith("Bearer "):
-        logger.warning(f"Request {request_id} missing or invalid Authorization header")
+        logger.warning(f"Request {request_id} missing or invalid Authorization header")        
         raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
-    
+
     if 1==1:
-        this_stake = MIN_ALPHA_STAKE
-        this_stake = 0
-        if not await check_hotkey_stake(x_hotkey, this_stake):
-            logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
-            raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
+        min_stake = MIN_ALPHA_STAKE
+        min_stake = 0
+        if not await check_hotkey_stake(x_hotkey, min_stake):
+            logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake ({min_stake}) in the metagraph")
+            raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {min_stake}")
     if 1==2:
         if not await check_request_ip(x_hotkey, client_ip):
             logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
-            raise HTTPException(400, "INVALID REQUEST: IP MISMATCH")
+            raise HTTPException(401, "INVALID REQUEST: IP MISMATCH")
     
     try:
         provider = LLMProvider.from_str(x_provider)
@@ -301,7 +306,7 @@ async def forward_proxy_request(
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
 
-        payload = completion_request.model_dump(exclude_unset=True)        
+        payload = completion_request.model_dump(exclude_unset=True)
         response = await client.post(
             url,
             json=payload,

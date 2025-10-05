@@ -11,12 +11,15 @@ from fiber.chain.metagraph import Metagraph
 logger = logging.getLogger(__name__)
 
 
+
+
 class MetagraphSyncManager:
     """Dedicated manager to keep metagraph data fresh without leaking threads."""
-    def __init__(self, network: str, netuid: int, sync_interval: int = 600):
+    def __init__(self, network: str, netuid: int, sync_interval: int = 600, max_cycles_before_restart: int = 10):
         self.network = network
         self.netuid = netuid
         self.sync_interval = sync_interval
+        self.max_cycles_before_restart = max_cycles_before_restart  # Restart process after this many syncs to clear memory
         self._manager = multiprocessing.Manager()
         self._snapshot: Dict[str, Dict[str, Any]] = self._manager.dict()
         self._synced_at = self._manager.Value('f', None)
@@ -46,6 +49,7 @@ class MetagraphSyncManager:
 
     def _run(self) -> None:
         logger.info("MetagraphSyncManager process started")
+        cycle_count = 0
         while not self._stop_event.is_set():
             substrate = None
             tmp_metagraph = None
@@ -88,6 +92,14 @@ class MetagraphSyncManager:
                         logger.info("Metagraph substrate connection closed")
                     except Exception as e:
                         logger.warning(f"Error closing substrate: {e}")
+            
+            cycle_count += 1
+            if cycle_count >= self.max_cycles_before_restart:
+                logger.info(f"MetagraphSyncManager restarting after {cycle_count} cycles to clear memory")
+                break  # Exit process to trigger restart
+            
             self._stop_event.wait(self.sync_interval)
+        
+        # If we broke out due to max_cycles, the main process will restart us
         logger.info("MetagraphSyncManager process stopped")
 
