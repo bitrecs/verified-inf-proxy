@@ -38,11 +38,11 @@ verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 900  # 15 minutes
 
 client = httpx.AsyncClient(
-    timeout=httpx.Timeout(60.0),
+    timeout=httpx.Timeout(30.0),
     limits=httpx.Limits(
         max_connections=50,
         max_keepalive_connections=10,
-        keepalive_expiry=30.0
+        keepalive_expiry=15.0
     )
 )
 
@@ -87,19 +87,15 @@ def get_client_ip(request: Request) -> str:
 
 def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
     """Simple in-memory rate limiter without background threads."""
-    now = time.time()
-    
+    now = time.time()    
     with rate_limit_lock:
         if key in rate_limit_store:
             rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window]
         else:
-            rate_limit_store[key] = []
-        
-        current_count = len(rate_limit_store[key])
-        
+            rate_limit_store[key] = []        
+        current_count = len(rate_limit_store[key])        
         if current_count >= limit:
-            return False
-        
+            return False        
         rate_limit_store[key].append(now)
         return True
 
@@ -182,6 +178,9 @@ async def health(request: Request):
         "total_requests": app.state.total_requests,
         "exceptions": app.state.exceptions,
         "threads": thread_count,
+        "metagraph_last_synced": synced_at,
+        "metagraph_age_seconds": time.time() - synced_at if synced_at else None,
+        "last_updated": app.state.last_updated,
         "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0
     }
 
@@ -327,7 +326,7 @@ async def forward_proxy_request(
         et = time.perf_counter()
         duration = et - st
 
-        # Submit to thread pool - it will reuse threads properly
+        # Write to D1 in background thread
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
             app.state.thread_pool,  # Use the bounded pool
@@ -359,11 +358,40 @@ async def forward_proxy_request(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# @app.post("/verify")
+# async def verify_endpoint(
+#     request: Request,
+#     response: SignedResponse
+# ) -> Dict[str, Union[bool, str]]:
+#     client_ip = get_client_ip(request)
+#     if not check_rate_limit(f"verify:{client_ip}", limit=120):
+#         raise HTTPException(429, "Rate limit exceeded")
+    
+#     try:        
+#         PUBLIC_KEY.verify(
+#             base64.b64decode(response.signature), 
+#             json.dumps(response.proof, sort_keys=True).encode()
+#         )
+#         return {
+#             "valid": True,
+#             "hotkey": response.proof.get("hotkey"),
+#             "timestamp": response.proof.get("timestamp"),
+#             "model": response.proof.get("model"),
+#             "provider": response.proof.get("provider")
+#         }
+#     except Exception as e:
+#         logger.warning(f"Verification failed: {str(e)}")
+#         return {
+#             "valid": False,
+#             "error": "Invalid signature"
+#         }
+
+
 @app.post("/verify")
 async def verify_endpoint(
     request: Request,
     response: SignedResponse
-) -> Dict[str, Union[bool, str]]:
+) -> Dict[str, Union[bool, str, None]]:
     client_ip = get_client_ip(request)
     if not check_rate_limit(f"verify:{client_ip}", limit=120):
         raise HTTPException(429, "Rate limit exceeded")
@@ -376,7 +404,7 @@ async def verify_endpoint(
         return {
             "valid": True,
             "hotkey": response.proof.get("hotkey"),
-            "timestamp": response.proof.get("timestamp"),
+            "timestamp": response.timestamp,  # Use response.timestamp instead of response.proof.get("timestamp")
             "model": response.proof.get("model"),
             "provider": response.proof.get("provider")
         }
