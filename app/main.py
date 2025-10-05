@@ -110,6 +110,7 @@ async def check_hotkey_stake(
         return False
     snapshot, _ = metagraph_manager.get_snapshot()
     node = snapshot.get(hotkey)
+    logger.info(f"check_hotkey_stake {hotkey} : {node['stake'] if node else 'N/A'}, required {stake}")
     return node["stake"] > stake if node else False
 
 
@@ -265,8 +266,10 @@ async def forward_proxy_request(
         logger.warning(f"Request {request_id} missing or invalid Authorization header")
         raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
     
-    if 1==2:
-        if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):
+    if 1==1:
+        this_stake = MIN_ALPHA_STAKE
+        this_stake = 0
+        if not await check_hotkey_stake(x_hotkey, this_stake):
             logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake in the metagraph")
             raise HTTPException(400, "INVALID REQUEST: INSUFFICIENT STAKE")
     if 1==2:
