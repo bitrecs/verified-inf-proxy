@@ -1,7 +1,7 @@
 import time
 import logging
 import traceback
-import threading
+import multiprocessing
 from dotenv import load_dotenv
 load_dotenv()
 from typing import Dict, Any, Tuple
@@ -11,42 +11,41 @@ from fiber.chain.metagraph import Metagraph
 logger = logging.getLogger(__name__)
 
 
-
-
 class MetagraphSyncManager:
     """Dedicated manager to keep metagraph data fresh without leaking threads."""
     def __init__(self, network: str, netuid: int, sync_interval: int = 600):
         self.network = network
         self.netuid = netuid
         self.sync_interval = sync_interval
-        self._lock = threading.RLock()
-        self._snapshot: Dict[str, Dict[str, Any]] = {}
-        self._synced_at: float | None = None
-        self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
+        self._manager = multiprocessing.Manager()
+        self._snapshot: Dict[str, Dict[str, Any]] = self._manager.dict()
+        self._synced_at = self._manager.Value('f', None)
+        self._stop_event = multiprocessing.Event()
+        self._process: multiprocessing.Process | None = None
 
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
+        if self._process and self._process.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(
+        self._process = multiprocessing.Process(
             target=self._run,
             name="MetagraphSyncManager",
             daemon=True
         )
-        self._thread.start()
+        self._process.start()
 
     def stop(self) -> None:
         self._stop_event.set()
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=20)
+        if self._process and self._process.is_alive():
+            self._process.join(timeout=20)
+            if self._process.is_alive():
+                self._process.terminate()
 
     def get_snapshot(self) -> Tuple[Dict[str, Dict[str, Any]], float | None]:
-        with self._lock:
-            return dict(self._snapshot), self._synced_at
+        return dict(self._snapshot), self._synced_at.value
 
     def _run(self) -> None:
-        logger.info("MetagraphSyncManager thread started")
+        logger.info("MetagraphSyncManager process started")
         while not self._stop_event.is_set():
             substrate = None
             tmp_metagraph = None
@@ -70,9 +69,9 @@ class MetagraphSyncManager:
                         "version": getattr(node, "version", None),
                     }
                         
-                with self._lock:
-                    self._snapshot = snapshot
-                    self._synced_at = time.time()
+                self._snapshot.clear()
+                self._snapshot.update(snapshot)
+                self._synced_at.value = time.time()
                 logger.info(f"Metagraph sync complete: {len(snapshot)} nodes")
             except Exception as e:
                 logger.error(f"Metagraph sync failed: {e}")
@@ -90,5 +89,5 @@ class MetagraphSyncManager:
                     except Exception as e:
                         logger.warning(f"Error closing substrate: {e}")
             self._stop_event.wait(self.sync_interval)
-        logger.info("MetagraphSyncManager thread stopped")
+        logger.info("MetagraphSyncManager process stopped")
 
