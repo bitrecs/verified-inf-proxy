@@ -9,6 +9,7 @@ import httpx
 import asyncio
 import logging
 import threading
+import tracemalloc  # Add this import for memory tracking
 from dotenv import load_dotenv
 load_dotenv()
 from collections import defaultdict
@@ -126,6 +127,8 @@ async def check_request_ip(
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
     logger.info("Server starting up")    
+    tracemalloc.start()  # Start tracing memory allocations
+    logger.info("tracemalloc started")
     app.state.thread_pool = ThreadPoolExecutor(
         max_workers=1,
         thread_name_prefix="D1-Writer"
@@ -171,6 +174,12 @@ async def health(request: Request):
         message = "CRITICAL: Very high thread count"
         logger.error(f"CRITICAL: Thread count {thread_count}")
     
+    # Memory diagnostics
+    current, peak = tracemalloc.get_traced_memory()
+    memory_snapshot = tracemalloc.take_snapshot()
+    top_stats = memory_snapshot.statistics('lineno')
+    top_5_allocators = [str(stat) for stat in top_stats[:5]]  # Top 5 memory allocators by line
+    
     return {
         "status": "healthy",
         "nodes": node_count,
@@ -180,6 +189,9 @@ async def health(request: Request):
         "metagraph_last_synced": int(synced_at) if synced_at else None,
         "metagraph_age_seconds": round(time.time() - synced_at, 2) if synced_at else None,        
         "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0,
+        "memory_current_mb": round(current / 1024 / 1024, 2),
+        "memory_peak_mb": round(peak / 1024 / 1024, 2),
+        "top_memory_allocators": top_5_allocators,  # Shows code lines allocating most memory
         "message": message
     }
 
