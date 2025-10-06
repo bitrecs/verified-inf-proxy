@@ -191,7 +191,7 @@ async def lifespan(app: FastAPI):
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
-app = FastAPI(debug=True, lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
 @app.get("/health")
