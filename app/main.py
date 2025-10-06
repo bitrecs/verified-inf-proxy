@@ -27,11 +27,15 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from app.metagraph_sync_manager import MetagraphSyncManager
 
+logging.basicConfig(
+    level=logging.INFO,  # Match your logger level
+    format='%(asctime)s | %(levelname)s | %(name)s:%(lineno)d - %(message)s',
+    handlers=[logging.StreamHandler()]  # Output to console
+)
+logger = logging.getLogger(__name__)
+
 rate_limit_store = defaultdict(list)
 rate_limit_lock = threading.Lock()
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 METAGRAPH_CACHE_DURATION = 600  # 10 minutes
 
@@ -73,6 +77,7 @@ metagraph_manager = MetagraphSyncManager(
     netuid=BT_NETUID,
     sync_interval=METAGRAPH_CACHE_DURATION
 )
+metagraph_snapshot = {"nodes": {}}
 
 # def get_client_ip(request: Request) -> str:    
 #     if "x-real-ip" in request.headers:
@@ -148,7 +153,7 @@ async def lifespan(app: FastAPI):
     tracemalloc.start()
     
     app.state.thread_pool = ThreadPoolExecutor(
-        max_workers=1,
+        max_workers=2,
         thread_name_prefix="D1-Writer"
     )
     
@@ -161,12 +166,19 @@ async def lifespan(app: FastAPI):
     
     # Background task to restart manager if dead
     async def restart_manager():
+        logger.info("Starting restart_manager task")
         while True:
-            await asyncio.sleep(60)  # Check every 60 seconds
-            if not metagraph_manager._process or not metagraph_manager._process.is_alive():
-                logger.info("Restarting dead MetagraphSyncManager process")
-                metagraph_manager.start()
-    
+            try:
+                if not metagraph_manager._process or not metagraph_manager._process.is_alive():
+                    logger.info("Restarting dead MetagraphSyncManager process")
+                    metagraph_manager.start()
+                snapshot, _ = metagraph_manager.get_snapshot()
+                metagraph_snapshot["nodes"] = snapshot
+                logger.info(f"Metagraph snapshot updated with {len(snapshot)} nodes")
+            except Exception as e:
+                logger.error(f"Error in restart_manager: {e}")
+            await asyncio.sleep(60)
+
     app.state.restart_task = asyncio.create_task(restart_manager())
     
     try:
@@ -444,3 +456,4 @@ async def verify_endpoint(
             "valid": False,
             "error": "Invalid signature"
         }
+
