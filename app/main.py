@@ -194,6 +194,24 @@ async def lifespan(app: FastAPI):
 app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
+@app.get("/")
+async def read_root(request: Request):
+    ts = str(int(time.time()))
+    request_ip = get_client_ip(request)
+    if not check_rate_limit(f"root:{request_ip}", limit=60):
+        raise HTTPException(429, "Rate limit exceeded")
+    logger.info(f"Root endpoint accessed from IP {request_ip} at {ts}")
+
+    return JSONResponse(
+        status_code=200,
+        content={"message": "Bitrecs Verified Inference 🤝", 
+                 "ts": str(ts), 
+                 "network": BT_NETWORK,
+                 "uid": BT_NETUID,
+                 "total_requests": app.state.total_requests,
+                 "exceptions": app.state.exceptions})
+
+
 @app.get("/health")
 async def health(request: Request):
     client_ip = get_client_ip(request)
