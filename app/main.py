@@ -171,8 +171,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        logger.info("Starting shutdown...")
-        
+        logger.info("Starting shutdown...")        
         # Cancel restart task
         app.state.restart_task.cancel()
         try:
@@ -181,13 +180,10 @@ async def lifespan(app: FastAPI):
             pass
         
         # Stop metagraph manager
-        metagraph_manager.stop()
-        
-        await client.aclose()
-        
+        metagraph_manager.stop()        
+        await client.aclose()        
         logger.info("Shutting down D1 writer thread pool...")
-        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
-        
+        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)        
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
@@ -373,8 +369,7 @@ async def forward_proxy_request(
             logger.error(f"Upstream error for request {request_id}: {response.status_code}")
             logger.error(f"Response content: {response.text}")
             raise HTTPException(status_code=response.status_code, detail=response.text)
-
-        # Core proof (what gets signed - NO time data)
+        
         proof = {
             "request_hash": hashlib.sha256(json.dumps(completion_request.model_dump()).encode()).hexdigest(),
             "response_hash": hashlib.sha256(response.content).hexdigest(),
@@ -383,8 +378,7 @@ async def forward_proxy_request(
             "provider": str(provider),
             "unique_id": request_id
         }
-
-        # Sign only the core proof
+        
         serialized_proof = json.dumps(proof, sort_keys=True).encode()
         signature = PRIVATE_KEY.sign(serialized_proof)
         

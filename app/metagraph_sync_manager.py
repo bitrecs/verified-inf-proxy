@@ -90,13 +90,13 @@ class MetagraphSyncManager:
                     try:
                         tmp_metagraph.shutdown()
                     except Exception as e:
-                        logger.warning(f"Error shutting down metagraph: {e}")
+                        logger.error(f"Error shutting down metagraph: {e}")
                 if substrate is not None:
                     try:
                         substrate.close()
                         logger.info("Metagraph substrate connection closed")
                     except Exception as e:
-                        logger.warning(f"Error closing substrate: {e}")
+                        logger.error(f"Error closing substrate: {e}")
             # Force cleanup to prevent memory leaks
             try:
                 del tmp_metagraph
@@ -106,8 +106,8 @@ class MetagraphSyncManager:
                 pass  # Variables may not be defined if exception occurred early
             cycle_count += 1
             if cycle_count >= max_cycles_before_restart:
-                logger.info(f"MetagraphSyncManager restarting after {cycle_count} cycles to clear memory")
+                logger.info(f"\033[33mMetagraphSyncManager restarting after {cycle_count} cycles to clear memory leaks\033[0m")
                 break
             stop_event.wait(sync_interval)
-        logger.info("MetagraphSyncManager process stopped")
+        logger.info("\033[31mMetagraphSyncManager process stopped \033[0m")
 
