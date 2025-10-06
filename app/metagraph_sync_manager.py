@@ -96,6 +96,9 @@ class MetagraphSyncManager:
             cycle_count += 1
             if cycle_count >= self.max_cycles_before_restart:
                 logger.info(f"MetagraphSyncManager restarting after {cycle_count} cycles to clear memory")
+                logger.debug(f"\033[33mMetagraphSyncManager restarting after: {cycle_count} cycles to clear memory\033[0m")
+
+                logger.debug(f"Current snapshot size: {len(self._snapshot)} nodes")
                 break  # Exit process to trigger restart
             
             self._stop_event.wait(self.sync_interval)

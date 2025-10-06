@@ -144,31 +144,55 @@ async def check_request_ip(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
-    logger.info("Server starting up")    
-    tracemalloc.start()  # Start tracing memory allocations
-    logger.info("tracemalloc started")
+    logger.info("Server starting up")
+    tracemalloc.start()
+    
     app.state.thread_pool = ThreadPoolExecutor(
         max_workers=1,
         thread_name_prefix="D1-Writer"
-    )    
+    )
+    
     app.state.last_updated = None
     app.state.total_requests = 0
-    app.state.exceptions = 0    
+    app.state.exceptions = 0
+    
     # Start the metagraph manager
-    metagraph_manager.start()    
+    metagraph_manager.start()
+    
+    # Background task to restart manager if dead
+    async def restart_manager():
+        while True:
+            await asyncio.sleep(60)  # Check every 60 seconds
+            if not metagraph_manager._process or not metagraph_manager._process.is_alive():
+                logger.info("Restarting dead MetagraphSyncManager process")
+                metagraph_manager.start()
+    
+    app.state.restart_task = asyncio.create_task(restart_manager())
+    
     try:
         yield
     finally:
         logger.info("Starting shutdown...")
+        
+        # Cancel restart task
+        app.state.restart_task.cancel()
+        try:
+            await app.state.restart_task
+        except asyncio.CancelledError:
+            pass
+        
         # Stop metagraph manager
-        metagraph_manager.stop()        
-        await client.aclose()        
+        metagraph_manager.stop()
+        
+        await client.aclose()
+        
         logger.info("Shutting down D1 writer thread pool...")
-        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)        
+        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
+        
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
-app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(debug=True, lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
 @app.get("/health")
