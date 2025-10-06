@@ -2,6 +2,7 @@ import time
 import logging
 import traceback
 import multiprocessing
+import gc  # Added for explicit cleanup
 from dotenv import load_dotenv
 load_dotenv()
 from typing import Dict, Any, Tuple
@@ -96,6 +97,13 @@ class MetagraphSyncManager:
                         logger.info("Metagraph substrate connection closed")
                     except Exception as e:
                         logger.warning(f"Error closing substrate: {e}")
+            # Force cleanup to prevent memory leaks
+            try:
+                del tmp_metagraph
+                del substrate
+                gc.collect()
+            except NameError:
+                pass  # Variables may not be defined if exception occurred early
             cycle_count += 1
             if cycle_count >= max_cycles_before_restart:
                 logger.info(f"MetagraphSyncManager restarting after {cycle_count} cycles to clear memory")
