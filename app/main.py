@@ -68,7 +68,6 @@ d1_client = D1Handler(
     database_id=CF_D1_DATABASE_ID
 )
 
-# Initialize MetagraphSyncManager
 metagraph_manager = MetagraphSyncManager(
     network=BT_NETWORK,
     netuid=BT_NETUID,
@@ -91,7 +90,8 @@ metagraph_manager = MetagraphSyncManager(
 def get_client_ip(request: Request) -> str:    
     # Log headers for debugging (remove after testing)
     logger.info(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, client: {request.client}")
-    
+    if "do-connecting-ip" in request.headers:
+        return request.headers["do-connecting-ip"].strip()
     if "x-real-ip" in request.headers:
         return request.headers["x-real-ip"].strip()
     if "x-forwarded-for" in request.headers:
@@ -238,19 +238,16 @@ async def verified_log(request: Request):
     
     ts = str(int(time.time()))
     request_ip = get_client_ip(request)
-    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
     
-    # Check if we have cached HTML and it's still valid
     current_time = time.time()
     if (verified_display_cache is not None and
         verified_display_cache_timestamp is not None and
-        (current_time - verified_display_cache_timestamp) < VERIFIED_DISPLAY_CACHE_DURATION):
-        #logger.info("Returning cached verified_display HTML")
+        (current_time - verified_display_cache_timestamp) < VERIFIED_DISPLAY_CACHE_DURATION):        
         return HTMLResponse(content=verified_display_cache)
     
     # Fetch fresh data
-    verified = await d1_client.select_all_signed_responses(top=100)
-    #print(f"Fetched {len(verified)} verified records from D1")
+    verified = await d1_client.select_all_signed_responses(top=100)    
     html_content = HTMLTemplates.render_verified_display(
         verified=verified,
         bt_network=BT_NETWORK,
@@ -302,7 +299,7 @@ async def forward_proxy_request(
     try:
         provider = LLMProvider.from_str(x_provider)
         match provider:
-            case LLMProvider.CHAT_GPT:                
+            case LLMProvider.CHAT_GPT:
                 if completion_request.model.startswith("gpt-5"):
                     url = "https://api.openai.com/v1/responses"
                 else:
