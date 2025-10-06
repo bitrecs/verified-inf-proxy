@@ -92,18 +92,17 @@ metagraph_snapshot = {"nodes": {}}
 #     return "unknown"
 
 
-def get_client_ip(request: Request) -> str:    
-    # Log headers for debugging (remove after testing)
-    logger.info(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, client: {request.client}")
+def get_client_ip(request: Request) -> str:
+    logger.info(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
+    if "x-forwarded-for" in request.headers:
+        forwarded_for = request.headers["x-forwarded-for"].strip()
+        ips = [ip.strip() for ip in forwarded_for.split(",")]
+        if ips:
+            return ips[-1]
     if "do-connecting-ip" in request.headers:
         return request.headers["do-connecting-ip"].strip()
     if "x-real-ip" in request.headers:
         return request.headers["x-real-ip"].strip()
-    if "x-forwarded-for" in request.headers:
-        forwarded_for = request.headers["x-forwarded-for"].strip()
-        ips = [ip.strip() for ip in forwarded_for.split(",")]
-        if ips:            
-            return ips[-1]  # Changed: Take the last IP (likely the client IP in DO setups with multiple proxies)
     if request.client:
         return str(request.client.host)
     return "unknown"
