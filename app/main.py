@@ -81,7 +81,7 @@ metagraph_snapshot = {"nodes": {}}
 
 
 def get_client_ip(request: Request) -> str:
-    logger.info(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
+    logger.debug(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
     if "do-connecting-ip" in request.headers:
         return request.headers.get('do-connecting-ip').strip()
     if "x-forwarded-for" in request.headers:
@@ -197,6 +197,7 @@ app = FastAPI(debug=True, lifespan=lifespan, docs_url=None, redoc_url=None)
 @app.get("/health")
 async def health(request: Request):
     client_ip = get_client_ip(request)
+    logger.info(f"Health check from IP: {client_ip}")
     if not check_rate_limit(f"health:{client_ip}", limit=60):
         raise HTTPException(429, "Rate limit exceeded")
   
