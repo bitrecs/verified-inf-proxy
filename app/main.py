@@ -81,7 +81,7 @@ metagraph_snapshot = {"nodes": {}}
 
 
 def get_client_ip(request: Request) -> str:
-    logger.debug(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
+    logger.info(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
     if "do-connecting-ip" in request.headers:
         return request.headers["do-connecting-ip"].strip()
     if "x-forwarded-for" in request.headers:
