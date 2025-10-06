@@ -204,7 +204,7 @@ async def read_root(request: Request):
 
     return JSONResponse(
         status_code=200,
-        content={"message": "Bitrecs Verified Inference 🤝", 
+        content={"message": "Bitrecs Verified Inference 😇 ",
                  "ts": str(ts), 
                  "network": BT_NETWORK,
                  "uid": BT_NETUID,
