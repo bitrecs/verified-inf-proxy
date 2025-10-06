@@ -94,13 +94,13 @@ metagraph_snapshot = {"nodes": {}}
 
 def get_client_ip(request: Request) -> str:
     logger.info(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
+    if "do-connecting-ip" in request.headers:
+        return request.headers["do-connecting-ip"].strip()
     if "x-forwarded-for" in request.headers:
         forwarded_for = request.headers["x-forwarded-for"].strip()
         ips = [ip.strip() for ip in forwarded_for.split(",")]
         if ips:
-            return ips[-1]
-    if "do-connecting-ip" in request.headers:
-        return request.headers["do-connecting-ip"].strip()
+            return ips[-1]    
     if "x-real-ip" in request.headers:
         return request.headers["x-real-ip"].strip()
     if request.client:
