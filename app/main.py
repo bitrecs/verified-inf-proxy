@@ -157,7 +157,7 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 if not metagraph_manager._process or not metagraph_manager._process.is_alive():
-                    logger.info("Restarting dead MetagraphSyncManager process")
+                    logger.warning("Restarting dead MetagraphSyncManager process")
                     metagraph_manager.start()
                 snapshot, _ = metagraph_manager.get_snapshot()
                 metagraph_snapshot["nodes"] = snapshot
@@ -200,7 +200,7 @@ async def read_root(request: Request):
 
     return JSONResponse(
         status_code=200,
-        content={"message": "Bitrecs Verified Inference 😇 ",
+        content={"message": "Bitrecs Verified Inference 🤝",
                  "ts": str(ts), 
                  "network": BT_NETWORK,
                  "uid": BT_NETUID,
