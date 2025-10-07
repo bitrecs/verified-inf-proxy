@@ -312,7 +312,7 @@ async def is_verified(request: Request, hotkey: str):
                 if age_seconds > hour_delta * 3600:
                     result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {hour_delta} hours"}
                 else:
-                    result = {"verified": True, "hotkey": hotkey, "message": "Hotkey has a recent verified response (since {hour_delta} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
+                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has a recent verified response (since {hour_delta} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
     
     # Cache the result
     IS_VERIFIED_CACHE[hotkey] = result
