@@ -17,6 +17,7 @@ dependencies = [
     "pytest-asyncio>=1.2.0",
     "fiber",
     "numpy>=2.3.3",
+    "cachetools>=6.2.0",
 ]
 
 [tool.pytest.ini_options]

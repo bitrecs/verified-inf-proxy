@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 from typing import Any, Dict, List
@@ -13,6 +14,84 @@ class D1Handler:
         self.token = token
         self.database_id = database_id
         self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}"    
+
+    async def select_signed_responses_by_hotkey_since(self, hotkey: str, since_date: datetime, top: int = 100) -> List[Dict[str, Any]]:
+        """Select SignedResponses from D1 by hotkey and since_timestamp, limited by 'top', and reconstruct the 'proof' dict from individual fields."""
+        try:
+            since_date = since_date.isoformat()
+            #2025-10-07T16:01:27.254289+00:00
+            url = f"{self.base_url}/query"
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json"
+            }
+            sql = "SELECT * FROM signed_responses WHERE hotkey = ? AND timestamp >= ? ORDER BY timestamp DESC LIMIT ?"
+            params = [hotkey, since_date, top]
+            payload = {
+                "sql": sql,
+                "params": params
+            }
+            resp = requests.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get('success'):
+                rows = result['result'][0]['results']
+                # Reconstruct 'proof' dict from individual fields for each row
+                for row in rows:
+                    row['proof'] = {                        
+                        'request_hash': row.get('request_hash'),
+                        'response_hash': row.get('response_hash'),
+                        'hotkey': row.get('hotkey'),
+                        'model': row.get('model'),
+                        'provider': row.get('provider'),
+                        'unique_id': row.get('unique_id')
+                    }
+                return rows
+            else:
+                logger.error(f"Failed to fetch signed responses by hotkey since timestamp: {result}")
+                return []
+        except Exception as e:
+            print(f"Error fetching signed responses by hotkey since timestamp: {e}")
+            logger.error(f"Error fetching signed responses by hotkey since timestamp: {e}")
+            return []
+
+    # async def select_signed_responses_by_hotkey(self, hotkey: str, top: int = 100) -> List[Dict[str, Any]]:
+    #     """Select SignedResponses from D1 by hotkey, limited by 'top', and reconstruct the 'proof' dict from individual fields."""
+    #     try:
+    #         url = f"{self.base_url}/query"
+    #         headers = {
+    #             "Authorization": f"Bearer {self.token}",
+    #             "Content-Type": "application/json"
+    #         }
+    #         sql = "SELECT * FROM signed_responses WHERE hotkey = ? ORDER BY timestamp DESC LIMIT ?"
+    #         params = [hotkey, top]
+    #         payload = {
+    #             "sql": sql,
+    #             "params": params
+    #         }
+    #         resp = requests.post(url, headers=headers, json=payload)
+    #         resp.raise_for_status()
+    #         result = resp.json()
+    #         if result.get('success'):
+    #             rows = result['result'][0]['results']
+    #             # Reconstruct 'proof' dict from individual fields for each row
+    #             for row in rows:
+    #                 row['proof'] = {                        
+    #                     'request_hash': row.get('request_hash'),
+    #                     'response_hash': row.get('response_hash'),
+    #                     'hotkey': row.get('hotkey'),
+    #                     'model': row.get('model'),
+    #                     'provider': row.get('provider'),
+    #                     'unique_id': row.get('unique_id')
+    #                 }
+    #             return rows
+    #         else:
+    #             logger.error(f"Failed to fetch signed responses by hotkey: {result}")
+    #             return []
+    #     except Exception as e:
+    #         print(f"Error fetching signed responses by hotkey: {e}")
+    #         logger.error(f"Error fetching signed responses by hotkey: {e}")
+    #         return []
 
     async def select_all_signed_responses(self, top: int = 100) -> List[Dict[str, Any]]:
         """Select all SignedResponses from D1, limited by 'top', and reconstruct the 'proof' dict from individual fields."""

@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from app.llm_providers import LLMProvider
 from app.models import ChatCompletionRequest, SignedResponse
 from app.d1 import D1Handler
+from cachetools import TTLCache
 from app.html_templates import HTMLTemplates
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -41,6 +42,8 @@ verified_display_cache = None
 verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 1800
 
+IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=300)  # 5 minutes
+
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
     limits=httpx.Limits(
@@ -64,6 +67,7 @@ CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN")
 CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID")
 if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
     raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
+
 d1_client = D1Handler(
     account_id=CF_ACCOUNT_ID,
     token=CF_D1_TOKEN,
@@ -76,6 +80,7 @@ metagraph_manager = MetagraphSyncManager(
     sync_interval=METAGRAPH_CACHE_DURATION
 )
 metagraph_snapshot = {"nodes": {}}
+
 
 async def check_hotkey_stake(
     hotkey: str,
@@ -115,6 +120,7 @@ def get_client_ip(request: Request) -> str:
         return str(request.client.host)
     return "unknown"
 
+
 limiter = Limiter(key_func=get_client_ip)
 
 @asynccontextmanager
@@ -124,8 +130,7 @@ async def lifespan(app: FastAPI):
     app.state.thread_pool = ThreadPoolExecutor(
         max_workers=2,
         thread_name_prefix="D1-Writer"
-    )
-    
+    )    
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0    
@@ -268,6 +273,52 @@ async def verified_log(request: Request):
     verified_display_cache_timestamp = current_time
     logger.info("Updated verified_log cache")
     return HTMLResponse(content=html_content)
+
+
+@app.get("/is_verified")
+@limiter.limit("120/minute")
+async def is_verified(request: Request, hotkey: str):
+    client_ip = get_client_ip(request)
+    logger.info(f"is_verified called for hotkey {hotkey} from IP: {client_ip}")
+    if not hotkey:
+        raise HTTPException(400, "Missing hotkey parameter")
+    
+    # Check cache first
+    cached_result = IS_VERIFIED_CACHE.get(hotkey)
+    if cached_result:
+        logger.info(f"Cache hit for hotkey {hotkey}")
+        return JSONResponse(status_code=200, content=cached_result)
+
+    hour_delta = 8
+    since_date = datetime.now(timezone.utc) - timedelta(hours=hour_delta)
+    latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=1)
+    if not latest:
+        result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}
+    else:
+        latest_response = latest[0]
+        timestamp_str = latest_response.get("timestamp")
+        model = latest_response.get("model")
+        provider = latest_response.get("provider")
+        #logger.info(f"Latest response timestamp: {timestamp_str}, model: {model}, provider: {provider}")
+        if not timestamp_str:
+            result = {"verified": False, "hotkey": hotkey, "message": "No timestamp in latest response"}
+        else:
+            try:
+                timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            except ValueError:
+                result = {"verified": False, "message": "Invalid timestamp format"}
+            else:
+                age_seconds = (datetime.now(timezone.utc) - timestamp).total_seconds()
+                if age_seconds > hour_delta * 3600:
+                    result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {hour_delta} hours"}
+                else:
+                    result = {"verified": True, "hotkey": hotkey, "message": "Hotkey has a recent verified response (since {hour_delta} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
+    
+    # Cache the result
+    IS_VERIFIED_CACHE[hotkey] = result
+    logger.info(f"\033[32mCached result for hotkey {hotkey}: {result['verified']} \033[0m")
+    return JSONResponse(status_code=200, content=result)  
+
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
