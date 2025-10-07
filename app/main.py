@@ -12,7 +12,6 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from app.llm_providers import LLMProvider
 from app.models import ChatCompletionRequest, SignedResponse
@@ -28,7 +27,6 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from app.metagraph_sync_manager import MetagraphSyncManager
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 
 logging.basicConfig(
     level=logging.INFO,
@@ -117,8 +115,7 @@ def get_client_ip(request: Request) -> str:
         return str(request.client.host)
     return "unknown"
 
-limiter = Limiter(key_func=get_client_ip)  # In-memory rate limiter
-
+limiter = Limiter(key_func=get_client_ip)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
@@ -274,7 +271,7 @@ async def verified_log(request: Request):
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def forward_proxy_request(
     request: Request,
     completion_request: ChatCompletionRequest,
@@ -401,7 +398,7 @@ async def forward_proxy_request(
 
 
 @app.post("/verify")
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def verify_endpoint(
     request: Request,
     response: SignedResponse
