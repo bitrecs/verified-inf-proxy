@@ -12,7 +12,6 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from app.llm_providers import LLMProvider
 from app.models import ChatCompletionRequest, SignedResponse
@@ -26,22 +25,21 @@ from fastapi import FastAPI, Request, Header, HTTPException
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from app.metagraph_sync_manager import MetagraphSyncManager
+from slowapi import Limiter
+from slowapi.middleware import SlowAPIMiddleware
 
 logging.basicConfig(
-    level=logging.INFO,  # Match your logger level
+    level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(name)s:%(lineno)d - %(message)s',
-    handlers=[logging.StreamHandler()]  # Output to console
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
-rate_limit_store = defaultdict(list)
-rate_limit_lock = threading.Lock()
-
-METAGRAPH_CACHE_DURATION = 600  # 10 minutes
+METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 
 verified_display_cache = None
 verified_display_cache_timestamp = None
-VERIFIED_DISPLAY_CACHE_DURATION = 900  # 15 minutes
+VERIFIED_DISPLAY_CACHE_DURATION = 1800
 
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
@@ -79,38 +77,6 @@ metagraph_manager = MetagraphSyncManager(
 )
 metagraph_snapshot = {"nodes": {}}
 
-
-def get_client_ip(request: Request) -> str:
-    logger.debug(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
-    if "do-connecting-ip" in request.headers:
-        return request.headers.get('do-connecting-ip').strip()
-    if "x-forwarded-for" in request.headers:
-        forwarded_for = request.headers.get('x-forwarded-for')
-        ips = [ip.strip() for ip in forwarded_for.split(",")]
-        if ips:
-            return ips[0]
-    if "x-real-ip" in request.headers:
-        return request.headers["x-real-ip"].strip()
-    if request.client:
-        return str(request.client.host)
-    return "unknown"
-
-
-def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
-    """Simple in-memory rate limiter without background threads."""
-    now = time.time()    
-    with rate_limit_lock:
-        if key in rate_limit_store:
-            rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window]
-        else:
-            rate_limit_store[key] = []        
-        current_count = len(rate_limit_store[key])        
-        if current_count >= limit:
-            return False        
-        rate_limit_store[key].append(now)
-        return True
-
-
 async def check_hotkey_stake(
     hotkey: str,
     stake: float
@@ -134,11 +100,27 @@ async def check_request_ip(
     return node["ip"] == request_ip if node else False
 
 
+def get_client_ip(request: Request) -> str:
+    logger.debug(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
+    if "do-connecting-ip" in request.headers:
+        return request.headers.get('do-connecting-ip').strip()
+    if "x-forwarded-for" in request.headers:
+        forwarded_for = request.headers.get('x-forwarded-for')
+        ips = [ip.strip() for ip in forwarded_for.split(",")]
+        if ips:
+            return ips[0]
+    if "x-real-ip" in request.headers:
+        return request.headers["x-real-ip"].strip()
+    if request.client:
+        return str(request.client.host)
+    return "unknown"
+
+limiter = Limiter(key_func=get_client_ip)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):    
     logger.info("Server starting up")
-    tracemalloc.start()
-    
+    tracemalloc.start()    
     app.state.thread_pool = ThreadPoolExecutor(
         max_workers=2,
         thread_name_prefix="D1-Writer"
@@ -146,8 +128,7 @@ async def lifespan(app: FastAPI):
     
     app.state.last_updated = None
     app.state.total_requests = 0
-    app.state.exceptions = 0
-    
+    app.state.exceptions = 0    
     # Start the metagraph manager
     metagraph_manager.start()
     
@@ -157,7 +138,7 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 if not metagraph_manager._process or not metagraph_manager._process.is_alive():
-                    logger.info("Restarting dead MetagraphSyncManager process")
+                    logger.warning("Restarting dead MetagraphSyncManager process")
                     metagraph_manager.start()
                 snapshot, _ = metagraph_manager.get_snapshot()
                 metagraph_snapshot["nodes"] = snapshot
@@ -166,8 +147,8 @@ async def lifespan(app: FastAPI):
                 logger.error(f"Error in restart_manager: {e}")
             await asyncio.sleep(60)
 
-    app.state.restart_task = asyncio.create_task(restart_manager())
-    
+    app.state.restart_task = asyncio.create_task(restart_manager())    
+
     try:
         yield
     finally:
@@ -188,19 +169,19 @@ async def lifespan(app: FastAPI):
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
 app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
 
 
 @app.get("/")
+@limiter.limit("60/minute")
 async def read_root(request: Request):
     ts = str(int(time.time()))
     request_ip = get_client_ip(request)
-    if not check_rate_limit(f"root:{request_ip}", limit=60):
-        raise HTTPException(429, "Rate limit exceeded")
     logger.info(f"Root endpoint accessed from IP {request_ip} at {ts}")
-
     return JSONResponse(
         status_code=200,
-        content={"message": "Bitrecs Verified Inference 😇 ",
+        content={"message": "Bitrecs Verified Inference 🤝",
                  "ts": str(ts), 
                  "network": BT_NETWORK,
                  "uid": BT_NETUID,
@@ -209,12 +190,10 @@ async def read_root(request: Request):
 
 
 @app.get("/health")
+@limiter.limit("60/minute")
 async def health(request: Request):
     client_ip = get_client_ip(request)
-    logger.info(f"Health check from IP: {client_ip}")
-    if not check_rate_limit(f"health:{client_ip}", limit=60):
-        raise HTTPException(429, "Rate limit exceeded")
-  
+    logger.info(f"Health check from IP: {client_ip}")  
     snapshot, synced_at = metagraph_manager.get_snapshot()
     node_count = len(snapshot)
     thread_count = threading.active_count()
@@ -228,14 +207,12 @@ async def health(request: Request):
 
     if thread_count > 50:
         message = "CRITICAL: Very high thread count"
-        logger.error(f"CRITICAL: Thread count {thread_count}")
+        logger.error(f"CRITICAL: Thread count {thread_count}")    
     
-    # Memory diagnostics
     current, peak = tracemalloc.get_traced_memory()
-    memory_snapshot = tracemalloc.take_snapshot()
-    top_stats = memory_snapshot.statistics('lineno')
-    top_5_allocators = [str(stat) for stat in top_stats[:5]]  # Top 5 memory allocators by line
-    
+    #memory_snapshot = tracemalloc.take_snapshot()
+    #top_stats = memory_snapshot.statistics('lineno')
+    #top_5_allocators = [str(stat) for stat in top_stats[:5]]  # Top 5 memory allocators by line    
     return {
         "status": "healthy",
         "nodes": node_count,
@@ -247,17 +224,16 @@ async def health(request: Request):
         "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0,
         "memory_current_mb": round(current / 1024 / 1024, 2),
         "memory_peak_mb": round(peak / 1024 / 1024, 2),
-        "top_memory_allocators": top_5_allocators,  # Shows code lines allocating most memory
+        #"top_memory_allocators": top_5_allocators,
         "message": message
     }
 
 
 @app.get("/public_key")
+@limiter.limit("120/minute")
 async def get_public_key(request: Request):
     client_ip = get_client_ip(request)
-    if not check_rate_limit(f"public_key:{client_ip}", limit=180):
-        raise HTTPException(429, "Rate limit exceeded")
-    
+    logger.info(f"Public key requested from IP: {client_ip}")
     public_key_raw_bytes = PUBLIC_KEY.public_bytes(
         encoding=Encoding.Raw,
         format=PublicFormat.Raw
@@ -267,16 +243,12 @@ async def get_public_key(request: Request):
 
 
 @app.get("/log")
+@limiter.limit("60/minute")
 async def verified_log(request: Request):
-    client_ip = get_client_ip(request)
-    if not check_rate_limit(f"verified_log:{client_ip}", limit=60):
-        raise HTTPException(429, "Rate limit exceeded")
-    
     global verified_display_cache, verified_display_cache_timestamp
-    
-    ts = str(int(time.time()))
     request_ip = get_client_ip(request)
-    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
+    ts = str(int(time.time()))    
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
     
     current_time = time.time()
     if (verified_display_cache is not None and
@@ -299,6 +271,7 @@ async def verified_log(request: Request):
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
+@limiter.limit("120/minute")
 async def forward_proxy_request(
     request: Request,
     completion_request: ChatCompletionRequest,
@@ -307,8 +280,6 @@ async def forward_proxy_request(
     x_provider: str = Header()
 ) -> SignedResponse:
     client_ip = get_client_ip(request)
-    if not check_rate_limit(f"chat:{client_ip}", limit=60):
-        raise HTTPException(429, "Rate limit exceeded")
     
     request_id = str(uuid.uuid4())
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
@@ -405,7 +376,6 @@ async def forward_proxy_request(
             duration,
             str(provider)
         )
-
         app.state.total_requests += 1
         logger.info(f"Request {request_id} took {duration:.2f} seconds")
         return signed_response
@@ -428,14 +398,13 @@ async def forward_proxy_request(
 
 
 @app.post("/verify")
+@limiter.limit("120/minute")
 async def verify_endpoint(
     request: Request,
     response: SignedResponse
 ) -> Dict[str, Union[bool, str, None]]:
     client_ip = get_client_ip(request)
-    if not check_rate_limit(f"verify:{client_ip}", limit=120):
-        raise HTTPException(429, "Rate limit exceeded")
-    
+    logger.info(f"Verify endpoint called from IP: {client_ip}")
     try:        
         PUBLIC_KEY.verify(
             base64.b64decode(response.signature), 
@@ -456,4 +425,3 @@ async def verify_endpoint(
             "valid": False,
             "error": "Invalid signature"
         }
-
