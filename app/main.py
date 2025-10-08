@@ -42,7 +42,7 @@ verified_display_cache = None
 verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 1800
 
-IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=300)  # 5 minutes
+IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
 
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),

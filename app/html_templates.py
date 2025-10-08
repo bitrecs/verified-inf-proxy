@@ -17,6 +17,7 @@ class HTMLTemplates:
             # Parse response_json to extract content
             response_content = 'N/A'
             miner_url = f"https://dashboard.bitrecs.ai/miner?uid={hotkey}"
+            
             try:
                 response_data = json.loads(item.get('response_json', '{}'))
                 if 'choices' in response_data and response_data['choices']:
@@ -53,7 +54,7 @@ class HTMLTemplates:
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Verified Responses</title>
+        <title>Verified Inference Log</title>
         <style>
             * {{
                 margin: 0;
@@ -260,7 +261,7 @@ class HTMLTemplates:
     <body>
         <div class="container">
             <div class="header">
-                <h1>Verified Responses</h1>
+                <h1>Verified Inference Log</h1>
                 <div class="stats">
                     <div class="stat-item">
                         <span class="stat-label">Total:</span>

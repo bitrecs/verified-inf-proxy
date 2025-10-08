@@ -1,17 +1,15 @@
-# V.I. Proxy
+# Bitrecs Verified Infernece Proxy
 
-## Generate ED25519 Keys
-```bash
-openssl genpkey -algorithm Ed25519 -out private.pem
-openssl pkey -in private.pem -pubout -out public.pem
-```
+A simple FastAPI proxy for chat/completitons with ed25519 signing
 
 ## Configure Environment
 
 ### `proxy/.env` (server)
 ```
-private=./private.pem
-public=./public.pem
+B64_PRIVATE_KEY=ed25519 key
+CF_ACCOUNT_ID=cloudflare account
+CF_D1_TOKEN=cloudflare token
+CF_D1_DATABASE_ID=cloudflare database
 ```
 
 ### `proxy/tests/.env` (testing)
@@ -36,5 +34,10 @@ uv run pytest
 
 ## Endpoints
 Server runs on `http://127.0.0.1:8000`
+* `GET /` - root
+* `GET /health` - health
+* `GET /log` - verified log
+* `GET /public_key` - public key
+* `GET /is_verified` - miner verified lookup
 * `POST /v1/chat/completions` - Proxy endpoint
-* `GET /public_key` - Get public key
+
