@@ -384,7 +384,10 @@ async def forward_proxy_request(
         response = await client.post(
             url,
             json=payload,
-            headers={"Authorization": authorization}
+            headers={"Authorization": authorization, 
+                     "Referer": "verified.bitrecs.ai", 
+                     "X-Title": "Bitrecs Verified Proxy",
+                     "X-Request-ID": request_id}
         )
         
         if response.status_code != 200:
