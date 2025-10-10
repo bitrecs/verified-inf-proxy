@@ -84,6 +84,13 @@ class HTMLTemplates:
                 font-size: 24px;
                 color: #58a6ff;
                 margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                gap: 15px;  /* Space between logo and title */
+            }}
+            .header img {{
+                height: 40px;  /* Adjust logo size as needed */
+                width: auto;
             }}
             .stats {{
                 display: flex;
@@ -261,12 +268,11 @@ class HTMLTemplates:
     <body>
         <div class="container">
             <div class="header">
-                <h1>Verified Inference Log</h1>
-                <div class="stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Total:</span>
-                        <span>{len(verified)}</span>
-                    </div>
+                <h1>
+                    <img src="https://www.bitrecs.ai/assets/logo/x7k9m2n8/whiteonblack.png" alt="BitRecs Logo">
+                    Verified Inference Log
+                </h1>
+                <div class="stats">                   
                     <div class="stat-item">
                         <span class="stat-label">Network:</span>
                         <span>{bt_network}</span>
@@ -274,6 +280,10 @@ class HTMLTemplates:
                     <div class="stat-item">
                         <span class="stat-label">Netuid:</span>
                         <span>{bt_netuid}</span>
+                    </div>
+                     <div class="stat-item">
+                        <span class="stat-label">Samples:</span>
+                        <span>{len(verified)}</span>
                     </div>
                 </div>
             </div>

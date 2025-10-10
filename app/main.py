@@ -274,7 +274,7 @@ async def verified_log(request: Request):
         return HTMLResponse(content=verified_display_cache)
     
     # Fetch fresh data
-    verified = await d1_client.select_all_signed_responses(top=100)    
+    verified = await d1_client.select_all_signed_responses(top=250)    
     html_content = HTMLTemplates.render_verified_display(
         verified=verified,
         bt_network=BT_NETWORK,
