@@ -29,8 +29,20 @@ from app.metagraph_sync_manager import MetagraphSyncManager
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
 
+def get_platform():
+    if os.environ.get('GOOGLE_CLOUD_PROJECT') and os.environ.get('K_SERVICE'):
+        return 'gcp'
+    elif os.environ.get('DO_APP_ID'):
+        return 'do'
+    else:
+        return 'Unknown or Local'
+
+log_level = logging.INFO
+if get_platform() == 'gcp':   
+    log_level = logging.DEBUG
+    
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s | %(levelname)s | %(name)s:%(lineno)d - %(message)s',
     handlers=[logging.StreamHandler()]
 )
