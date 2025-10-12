@@ -148,10 +148,10 @@ class LLMProviderStats:
     
     @staticmethod
     def ping_provider_html(provider: LLMProvider) -> str:
-        """Pings, traceroutes, and retrieves domain info for the given LLMProvider, returning the report as a string."""
+        """Returns an HTML snippet (table) for the given LLMProvider's ping report."""
         domain = LLMProviderStats.provider_domain(provider)
         if not domain:
-            return f"No domain to ping for provider {provider} (likely local)."
+            return f"<p>No domain to ping for provider {provider} (likely local).</p>"
             
         # Gather domain info
         try:
@@ -161,7 +161,7 @@ class LLMProviderStats:
         
         print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address})")
         
-        # Perform ping using icmplib, with TCP fallback
+        # Perform ping using TCP
         avg_ping_time = "N/A"
         ping_status = "Failure"
         try:            
@@ -169,30 +169,29 @@ class LLMProviderStats:
             if ping_result:
                 ping_status = "Success"  
                 f = float(latency)              
-                avg_ping_time = f"{f:.2f} ms"  # Average round-trip time
+                avg_ping_time = f"{f:.2f} ms"
             else:
                 ping_status = "Failure (No response)"        
         except Exception as e:
             ping_status = f"Failure ({str(e)})"       
         
-        
-        # Prepare table data as list of tuples (metric, details)
+        # Prepare table data
         table_data = [
             ("Provider", str(provider)),
             ("Domain", domain),
             ("IP Address", ip_address),
             ("Ping Status", ping_status),
             ("Average Ping Time", avg_ping_time),
-            # ("Traceroute Results", trace_output)
         ]
-        
         
         # Build HTML table rows
         rows_html = ""
         for metric, details in table_data:
             rows_html += f"<tr><td class='td-metric'>{metric}</td><td>{details}</td></tr>\n"
         
-        html_content = f"""
+        # Return only the table snippet (no full page)
+        html_snippet = f"""
+        <h2>Ping Report for {provider}</h2>
         <table>
             <thead>
                 <tr><th>Metric</th><th>Details</th></tr>
@@ -202,15 +201,38 @@ class LLMProviderStats:
             </tbody>
         </table>
         """
+        return html_snippet
+    
+    @staticmethod
+    def print_all_providers_info() -> str:
+        output = ""
+        for provider in islice(LLMProvider, 3):
+        #for provider in LLMProvider:
+            output += "\n" + "="*80 + "\n"
+            output += LLMProviderStats.ping_provider(provider)
+            output += "\n" + "="*80 + "\n"
+        return output
+    
+    @staticmethod
+    def print_all_providers_info_html() -> str:
+        """Returns a full HTML page with ping reports for all providers (except exemptions)."""
+        exemptions = [LLMProvider.OLLAMA_LOCAL, LLMProvider.VLLM]
+        snippets = []
+        for provider in LLMProvider:
+            if provider in exemptions:
+                continue
+            snippets.append(LLMProviderStats.ping_provider_html(provider))
         
-        # Full HTML page with inline CSS to match a clean /log style
+        # Combine all snippets into a single full HTML page
+        all_snippets_html = "\n".join(snippets)
+        
         html_page = f"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Ping Report for {provider}</title>
+            <title>All Providers Ping Reports</title>
             <style>
                 body {{
                     font-family: 'Courier New', monospace;
@@ -222,6 +244,10 @@ class LLMProviderStats:
                 }}
                 h1 {{
                     color: #555;
+                }}
+                h2 {{
+                    color: #666;
+                    margin-top: 40px;
                 }}
                 table {{
                     width: 80%;
@@ -249,30 +275,9 @@ class LLMProviderStats:
             </style>
         </head>
         <body>
-            <h1>Ping Report for {provider}</h1>
-            {html_content}
+            <h1>All Providers Ping Reports</h1>
+            {all_snippets_html}
         </body>
         </html>
         """
         return html_page
-    
-    @staticmethod
-    def print_all_providers_info() -> str:
-        output = ""
-        for provider in islice(LLMProvider, 3):
-        #for provider in LLMProvider:
-            output += "\n" + "="*80 + "\n"
-            output += LLMProviderStats.ping_provider(provider)
-            output += "\n" + "="*80 + "\n"
-        return output
-    
-    @staticmethod
-    def print_all_providers_info_html() -> str:
-        exemptions = [LLMProvider.OLLAMA_LOCAL, LLMProvider.VLLM]
-        html_output = ""
-        #for provider in islice(LLMProvider, 3):
-        for provider in LLMProvider:
-            if provider in exemptions:
-                continue
-            html_output += LLMProviderStats.ping_provider_html(provider)
-        return html_output
