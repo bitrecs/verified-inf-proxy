@@ -1,6 +1,6 @@
 
 
-.git
+#.git
 __pycache__
 *.pyc
 tests/

@@ -1,12 +1,13 @@
 services:
   fastapi:
-    build: .
+    build:
+      context: .
+      args:
+        BRANCH: ${BRANCH:-unknown}  # Use env var or default
+        SHA: ${SHA:-unknown}
     ports:
       - "8000:8000"
-      
     environment:
       - FASTAPI_HOST=0.0.0.0
       - FASTAPI_PORT=8000
       - LOG_LEVEL=DEBUG
-      # - UVLOOP_DISABLED=1
-      # - DISABLE_NEST_ASYNCIO=True
