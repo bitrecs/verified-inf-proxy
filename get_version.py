@@ -4,7 +4,9 @@ import sys
 def get_git_info():
     try:
         # Get current branch
-        branch = subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip()
+        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], text=True).strip()
+        if not branch:  # Handle detached HEAD
+            branch = 'detached'
     except subprocess.CalledProcessError:
         branch = 'unknown'
     
