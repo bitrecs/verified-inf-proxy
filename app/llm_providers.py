@@ -1,9 +1,8 @@
-from enum import Enum
-import subprocess
+import time
 import socket
-import platform
-import re
 from itertools import islice
+from enum import Enum
+
 
 class LLMProvider(Enum):
     OLLAMA_LOCAL = 1
@@ -48,7 +47,23 @@ class LLMProvider(Enum):
 
 
 class LLMProviderStats:
-
+    @staticmethod
+    def tcp_ping(ip_address: str, port: int = 80, timeout: float = 10) -> tuple[bool, str]:
+        """Perform a TCP-based ping by connecting to the IP/port and measuring time."""
+        try:
+            start_time = time.time()
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
+                result = sock.connect_ex((ip_address, port))
+                end_time = time.time()
+                if result == 0:
+                    latency = (end_time - start_time) * 1000  # ms
+                    return True, f"{latency}"
+                else:
+                    return False, ""
+        except Exception as e:
+            return False, str(e)
+    
     @staticmethod
     def provider_domain(provider: LLMProvider) -> str:
         match provider:
@@ -88,36 +103,22 @@ class LLMProviderStats:
         except socket.gaierror:
             ip_address = "DNS resolution failed"
         
-        print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address})")
-        # Perform ping and extract average time
+        print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address})")        
+        
         avg_ping_time = "N/A"
         ping_status = "Failure"
-        try:
-            ping_cmd = ["ping", "-c", "4", domain] if platform.system() != "Windows" else ["ping", "-n", "4", domain]
-            ping_result = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=10)
-            if ping_result.returncode == 0:
-                ping_status = "Success"
-                # Parse average ping time from output (e.g., "round-trip min/avg/max/stddev = 10.0/15.0/20.0/5.0 ms")
-                match = re.search(r'round-trip.*= (\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+) ms', ping_result.stdout)
-                if match:
-                    avg_ping_time = f"{match.group(2)} ms"
-        except subprocess.TimeoutExpired:
-            ping_status = "Failure (Timeout)"
+        try:            
+            ping_result, latency = LLMProviderStats.tcp_ping(ip_address)
+            if ping_result:
+                ping_status = "Success"                
+                f = float(latency)              
+                avg_ping_time = f"{f:.2f} ms"  # Average round-trip time
+            else:
+                ping_status = "Failure (No response)"        
         except Exception as e:
-            ping_status = f"Failure ({str(e)})"
+            ping_status = f"Failure ({str(e)})"       
+       
         
-        # Perform traceroute
-        trace_output = ""
-        if 1==2:
-            try:
-                trace_cmd = ["traceroute", domain] if platform.system() != "Windows" else ["tracert", domain]
-                trace_result = subprocess.run(trace_cmd, capture_output=True, text=True, timeout=30)
-                trace_output = trace_result.stdout.strip() if trace_result.returncode == 0 else "Traceroute failed"
-            except subprocess.TimeoutExpired:
-                trace_output = "Traceroute timed out"
-            except Exception as e:
-                trace_output = f"Traceroute error: {str(e)}"
-            
         # Prepare table data as list of tuples (metric, details)
         table_data = [
             ("Provider", str(provider)),
@@ -125,98 +126,82 @@ class LLMProviderStats:
             ("IP Address", ip_address),
             ("Ping Status", ping_status),
             ("Average Ping Time", avg_ping_time),
-            #("Traceroute Results", trace_output)
+            # ("Traceroute Results", trace_output)
         ]
         
-        # Build table as a string using standard Python formatting
-        col_width_metric = 20  # Fixed width for "Metric" column
-        col_width_details = 80  # Fixed width for "Details" column (adjust as needed for long outputs)
+        # Build table as a string (same as original)
+        col_width_metric = 20
+        col_width_details = 80
         
         output = ""
-        # Print table header
         output += "+" + "-" * col_width_metric + "+" + "-" * col_width_details + "+\n"
         output += f"| {'Metric'.ljust(col_width_metric)} | {'Details'.ljust(col_width_details)} |\n"
         output += "+" + "-" * col_width_metric + "+" + "-" * col_width_details + "+\n"
         
-        # Print table rows
         for metric, details in table_data:
-            # Truncate or wrap details if too long (simple truncation here)
             details = details[:col_width_details-3] + "..." if len(details) > col_width_details else details
             output += f"| {metric.ljust(col_width_metric)} | {details.ljust(col_width_details)} |\n"
         
-        # Print table footer
         output += "+" + "-" * col_width_metric + "+" + "-" * col_width_details + "+\n"
         
         return output
     
     @staticmethod
     def ping_provider_html(provider: LLMProvider) -> str:
-        """Pings, traceroutes, and retrieves domain info for the given LLMProvider, returning a clean HTML page."""
+        """Pings, traceroutes, and retrieves domain info for the given LLMProvider, returning the report as a string."""
         domain = LLMProviderStats.provider_domain(provider)
         if not domain:
-            html_content = f"No domain to ping for provider {provider} (likely local)."
-        else:
-            # Gather domain info
-            try:
-                ip_address = socket.gethostbyname(domain)
-            except socket.gaierror:
-                ip_address = "DNS resolution failed"
+            return f"No domain to ping for provider {provider} (likely local)."
             
-            print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address})")
-            # Perform ping and extract average time
-            avg_ping_time = "N/A"
-            ping_status = "Failure"
-            try:
-                ping_cmd = ["ping", "-c", "4", domain] if platform.system() != "Windows" else ["ping", "-n", "4", domain]
-                ping_result = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=10)
-                if ping_result.returncode == 0:
-                    ping_status = "Success"
-                    # Parse average ping time from output (e.g., "round-trip min/avg/max/stddev = 10.0/15.0/20.0/5.0 ms")
-                    match = re.search(r'round-trip.*= (\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+) ms', ping_result.stdout)
-                    if match:
-                        avg_ping_time = f"{match.group(2)} ms"
-            except subprocess.TimeoutExpired:
-                ping_status = "Failure (Timeout)"
-            except Exception as e:
-                ping_status = f"Failure ({str(e)})"
-            
-            # Perform traceroute
-            trace_output = ""
-            if 1==2:
-                try:
-                    trace_cmd = ["traceroute", domain] if platform.system() != "Windows" else ["tracert", domain]
-                    trace_result = subprocess.run(trace_cmd, capture_output=True, text=True, timeout=30)
-                    trace_output = trace_result.stdout.strip() if trace_result.returncode == 0 else "Traceroute failed"
-                except subprocess.TimeoutExpired:
-                    trace_output = "Traceroute timed out"
-                except Exception as e:
-                    trace_output = f"Traceroute error: {str(e)}"
-                
-            # Prepare table data
-            table_data = [
-                ("Provider", str(provider)),
-                ("Domain", domain),
-                ("IP Address", ip_address),
-                ("Ping Status", ping_status),
-                ("Average Ping Time", avg_ping_time),
-                #("Traceroute Results", trace_output)
-            ]
-            
-            # Build HTML table rows
-            rows_html = ""
-            for metric, details in table_data:
-                rows_html += f"<tr><td>{metric}</td><td>{details}</td></tr>\n"
-            
-            html_content = f"""
-            <table>
-                <thead>
-                    <tr><th>Metric</th><th>Details</th></tr>
-                </thead>
-                <tbody>
-                    {rows_html}
-                </tbody>
-            </table>
-            """
+        # Gather domain info
+        try:
+            ip_address = socket.gethostbyname(domain)
+        except socket.gaierror:
+            ip_address = "DNS resolution failed"
+        
+        print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address})")
+        
+        # Perform ping using icmplib, with TCP fallback
+        avg_ping_time = "N/A"
+        ping_status = "Failure"
+        try:            
+            ping_result, latency = LLMProviderStats.tcp_ping(ip_address)
+            if ping_result:
+                ping_status = "Success"  
+                f = float(latency)              
+                avg_ping_time = f"{f:.2f} ms"  # Average round-trip time
+            else:
+                ping_status = "Failure (No response)"        
+        except Exception as e:
+            ping_status = f"Failure ({str(e)})"       
+        
+        
+        # Prepare table data as list of tuples (metric, details)
+        table_data = [
+            ("Provider", str(provider)),
+            ("Domain", domain),
+            ("IP Address", ip_address),
+            ("Ping Status", ping_status),
+            ("Average Ping Time", avg_ping_time),
+            # ("Traceroute Results", trace_output)
+        ]
+        
+        
+        # Build HTML table rows
+        rows_html = ""
+        for metric, details in table_data:
+            rows_html += f"<tr><td class='td-metric'>{metric}</td><td>{details}</td></tr>\n"
+        
+        html_content = f"""
+        <table>
+            <thead>
+                <tr><th>Metric</th><th>Details</th></tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+        """
         
         # Full HTML page with inline CSS to match a clean /log style
         html_page = f"""
@@ -256,6 +241,10 @@ class LLMProviderStats:
                 }}
                 tr:nth-child(even) {{
                     background-color: #f9f9f9;
+                }}
+                .td-metric {{
+                    width: 20%;
+                    font-weight: bold;
                 }}
             </style>
         </head>
