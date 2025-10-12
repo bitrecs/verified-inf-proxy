@@ -13,7 +13,7 @@ import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from concurrent.futures import ThreadPoolExecutor
-from app.llm_providers import LLMProvider
+from app.llm_providers import LLMProvider, LLMProviderStats
 from app.models import ChatCompletionRequest, SignedResponse
 from app.d1 import D1Handler
 from cachetools import TTLCache
@@ -55,6 +55,7 @@ verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 1800
 
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
+PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
 
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
@@ -74,9 +75,9 @@ PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_
 PUBLIC_KEY = PRIVATE_KEY.public_key()
 MIN_ALPHA_STAKE = 100  # Minimum stake for alpha access
 
-CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
-CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN")
-CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID")
+CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
+CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
+CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID", "")
 if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
     raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
 
@@ -133,6 +134,20 @@ def get_client_ip(request: Request) -> str:
     return "unknown"
 
 
+async def refresh_provider_pings():
+    while True:
+        try:
+            logger.info("Refreshing provider pings cache")
+            output = LLMProviderStats.print_all_providers_info_html()
+            PROVIDER_PING_CACHE["provider_infos_html"] = output
+            logger.info(f"Provider pings cache updated: {len(output)} characters")
+            
+        except Exception as e:
+            logger.error(f"Error refreshing provider pings: {e}")
+        await asyncio.sleep(1800)  # Refresh every 30 minutes
+
+
+
 limiter = Limiter(key_func=get_client_ip)
 
 @asynccontextmanager
@@ -164,16 +179,20 @@ async def lifespan(app: FastAPI):
                 logger.error(f"Error in restart_manager: {e}")
             await asyncio.sleep(60)
 
-    app.state.restart_task = asyncio.create_task(restart_manager())    
+    app.state.restart_task = asyncio.create_task(restart_manager())
+    # create a task to refresh provider pings    
+    app.state.refresh_task = asyncio.create_task(refresh_provider_pings())
 
     try:
         yield
     finally:
         logger.info("Starting shutdown...")        
-        # Cancel restart task
+
         app.state.restart_task.cancel()
+        app.state.refresh_task.cancel()
         try:
             await app.state.restart_task
+            await app.state.refresh_task
         except asyncio.CancelledError:
             pass
         
@@ -285,6 +304,24 @@ async def verified_log(request: Request):
     verified_display_cache_timestamp = current_time
     logger.info("Updated verified_log cache")
     return HTMLResponse(content=html_content)
+
+
+
+@app.get("/providers")
+@limiter.limit("60/minute")
+async def provider_log(request: Request):
+    request_ip = get_client_ip(request)
+    logger.info(f"providers endpoint accessed from IP {request_ip}")
+
+    #its already cached
+    cache_key = "provider_infos_html"
+    if cache_key in PROVIDER_PING_CACHE:
+        logger.info(f"providers endpoint accessed from IP {request_ip} - using cached data")
+        infos = PROVIDER_PING_CACHE[cache_key]
+        return HTMLResponse(content=infos)
+
+    logging.warning("Cache Broken")
+    return HTMLResponse(content="<pre>Cache Empty</pre>")
 
 
 @app.get("/is_verified")
