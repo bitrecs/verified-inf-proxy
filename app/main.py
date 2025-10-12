@@ -11,6 +11,8 @@ import logging
 import threading
 import tracemalloc
 from dotenv import load_dotenv
+
+from app.utils import load_version_info
 load_dotenv()
 from concurrent.futures import ThreadPoolExecutor
 from app.llm_providers import LLMProvider, LLMProviderStats
@@ -243,12 +245,14 @@ async def health(request: Request):
 
     if thread_count > 50:
         message = "CRITICAL: Very high thread count"
-        logger.error(f"CRITICAL: Thread count {thread_count}")    
+        logger.error(f"CRITICAL: Thread count {thread_count}")            
     
     current, peak = tracemalloc.get_traced_memory()
     #memory_snapshot = tracemalloc.take_snapshot()
     #top_stats = memory_snapshot.statistics('lineno')
-    #top_5_allocators = [str(stat) for stat in top_stats[:5]]  # Top 5 memory allocators by line    
+    #top_5_allocators = [str(stat) for stat in top_stats[:5]]  # Top 5 memory allocators by line 
+    
+    version_file = load_version_info()
     return {
         "status": "healthy",
         "nodes": node_count,
@@ -261,7 +265,8 @@ async def health(request: Request):
         "memory_current_mb": round(current / 1024 / 1024, 2),
         "memory_peak_mb": round(peak / 1024 / 1024, 2),
         #"top_memory_allocators": top_5_allocators,
-        "message": message
+        "message": message,
+        "version": version_file.strip() if version_file else "N/A"
     }
 
 
