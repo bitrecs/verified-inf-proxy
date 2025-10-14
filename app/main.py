@@ -12,7 +12,7 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 
-from app.utils import load_version_info
+from app.utils import is_valid_hotkey, load_version_info
 load_dotenv()
 from concurrent.futures import ThreadPoolExecutor
 from app.llm_providers import LLMProvider, LLMProviderStats
@@ -336,6 +336,8 @@ async def is_verified(request: Request, hotkey: str):
     logger.info(f"is_verified called for hotkey {hotkey} from IP: {client_ip}")
     if not hotkey:
         raise HTTPException(400, "Missing hotkey parameter")
+    if not is_valid_hotkey(hotkey):
+        raise HTTPException(400, "Invalid hotkey format")
     
     # Check cache first
     cached_result = IS_VERIFIED_CACHE.get(hotkey)

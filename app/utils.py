@@ -1,7 +1,7 @@
 import os
+import re
 import json
 import logging
-import subprocess
 from typing import List
 from app.models import SignedResponse
 
@@ -80,4 +80,6 @@ def load_version_info() -> str:
         return "Error loading version info"
     
 
-
+def is_valid_hotkey(hotkey: str) -> bool:
+    pattern = r'^5[1-9A-Za-z]{47}$'
+    return re.match(pattern, hotkey) is not None

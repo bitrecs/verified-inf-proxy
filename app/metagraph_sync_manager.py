@@ -8,50 +8,48 @@ load_dotenv()
 from typing import Dict, Any, Tuple
 from fiber.chain import interface
 from fiber.chain.metagraph import Metagraph
-from async_substrate_interface import SubstrateInterface
-from fiber import constants as fcst
 
 
 logger = logging.getLogger(__name__)
 
 
-class FiberLoader:
+# class FiberLoader:
 
         
-        @staticmethod
-        def get_substrate_with_timeout( 
-            subtensor_network: str | None = fcst.FINNEY_NETWORK,
-            subtensor_address: str | None = None,
-            retry_timeout: int = 120
-        ) -> SubstrateInterface:
+#         @staticmethod
+#         def get_substrate_with_timeout( 
+#             subtensor_network: str | None = fcst.FINNEY_NETWORK,
+#             subtensor_address: str | None = None,
+#             retry_timeout: int = 120
+#         ) -> SubstrateInterface:
             
-            def _get_chain_endpoint(subtensor_network: str | None, subtensor_address: str | None) -> str:
-                if subtensor_network is None and subtensor_address is None:
-                    raise ValueError("subtensor_network and subtensor_address cannot both be None")
+#             def _get_chain_endpoint(subtensor_network: str | None, subtensor_address: str | None) -> str:
+#                 if subtensor_network is None and subtensor_address is None:
+#                     raise ValueError("subtensor_network and subtensor_address cannot both be None")
 
-                if subtensor_address is not None:
-                    logger.info(f"Using chain address: {subtensor_address}")
-                    return subtensor_address
+#                 if subtensor_address is not None:
+#                     logger.info(f"Using chain address: {subtensor_address}")
+#                     return subtensor_address
 
-                if subtensor_network not in fcst.SUBTENSOR_NETWORK_TO_SUBTENSOR_ADDRESS:
-                    raise ValueError(f"Unrecognized chain network: {subtensor_network}")
+#                 if subtensor_network not in fcst.SUBTENSOR_NETWORK_TO_SUBTENSOR_ADDRESS:
+#                     raise ValueError(f"Unrecognized chain network: {subtensor_network}")
 
-                subtensor_address = fcst.SUBTENSOR_NETWORK_TO_SUBTENSOR_ADDRESS[subtensor_network]
-                logger.info(f"Using the chain network: {subtensor_network} and therefore chain address: {subtensor_address}")
-                return subtensor_address
+#                 subtensor_address = fcst.SUBTENSOR_NETWORK_TO_SUBTENSOR_ADDRESS[subtensor_network]
+#                 logger.info(f"Using the chain network: {subtensor_network} and therefore chain address: {subtensor_address}")
+#                 return subtensor_address
 
 
-            subtensor_address = _get_chain_endpoint(subtensor_network, subtensor_address)
+#             subtensor_address = _get_chain_endpoint(subtensor_network, subtensor_address)
 
-            substrate = SubstrateInterface(
-                ss58_format=42,
-                use_remote_preset=True,
-                url=subtensor_address,
-                retry_timeout=retry_timeout
-            )
-            logger.info(f"Connected to {subtensor_address}")
+#             substrate = SubstrateInterface(
+#                 ss58_format=42,
+#                 use_remote_preset=True,
+#                 url=subtensor_address,
+#                 retry_timeout=retry_timeout
+#             )
+#             logger.info(f"Connected to {subtensor_address}")
 
-            return substrate
+#             return substrate
 
 
 class MetagraphSyncManager:
@@ -105,13 +103,8 @@ class MetagraphSyncManager:
         while not stop_event.is_set():
             substrate = None
             tmp_metagraph = None
-            try:
-                
+            try:                
                 substrate = interface.get_substrate(subtensor_network=network)
-                #retry_timeout = 180
-                #logger.info(f"Fiber custom loader with timeout {retry_timeout} seconds")
-                #substrate = FiberLoader.get_substrate_with_timeout(subtensor_network=network, retry_timeout=retry_timeout)
-
                 tmp_metagraph = Metagraph(
                     netuid=netuid,
                     substrate=substrate,
