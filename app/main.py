@@ -16,7 +16,7 @@ load_dotenv()
 from app.d1 import D1Handler
 from app.html_templates import HTMLTemplates
 from app.llm_providers import LLMProvider, LLMProviderStats
-from app.utils import is_valid_hotkey, load_version_info
+from app.utils import is_valid_hotkey, load_version_info, verify_miner_request
 from app.metagraph_sync_manager import MetagraphSyncManager
 from app.models import ChatCompletionRequest, SignedResponse
 
@@ -386,7 +386,9 @@ async def forward_proxy_request(
     completion_request: ChatCompletionRequest,
     authorization: str = Header(),  
     x_hotkey: str = Header(),
-    x_provider: str = Header()
+    x_provider: str = Header(),
+    x_nonce: str = Header(default=""),
+    x_signature: str = Header(default="")
 ) -> SignedResponse:
     client_ip = get_client_ip(request)
     
@@ -397,6 +399,18 @@ async def forward_proxy_request(
     if not authorization or not authorization.startswith("Bearer "):
         logger.warning(f"Request {request_id} missing or invalid Authorization header")        
         raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
+    
+    if 1==1:
+        verified = verify_miner_request(
+            hotkey=x_hotkey,
+            provider=x_provider,
+            nonce=x_nonce,
+            signature=x_signature,
+            payload=await request.body()
+        )
+        if not verified:
+            logger.error(f"Request {request_id} failed signature verification for hotkey {x_hotkey}")
+            #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
     
     snapshot, _ = metagraph_manager.get_snapshot()
     if not snapshot:

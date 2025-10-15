@@ -4,6 +4,9 @@ import json
 import logging
 from typing import List
 from app.models import SignedResponse
+from fiber import (
+    Keypair,
+)
 
 logger = logging.getLogger("verified")
 
@@ -83,3 +86,18 @@ def load_version_info() -> str:
 def is_valid_hotkey(hotkey: str) -> bool:
     pattern = r'^5[1-9A-Za-z]{47}$'
     return re.match(pattern, hotkey) is not None
+
+
+def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str, payload: bytes) -> bool:
+    payload_str = json.dumps({
+        "hotkey": hotkey,
+        "provider": provider,
+        "nonce": nonce,
+        "payload": payload
+    }, separators=(',', ':'), sort_keys=True)
+    keypair = Keypair(hotkey)
+    return keypair.verify(
+        payload_str.encode('utf-8'),
+        signature.encode('utf-8')
+    )
+   
