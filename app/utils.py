@@ -97,13 +97,10 @@ def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str,
             "nonce": nonce,
             "payload": payload
         }, separators=(',', ':'), sort_keys=True)
-        
-        # Hash the payload_str to match client signing
-        payload_hash = hashlib.sha256(payload_str.encode('utf-8')).digest()
-        
+        payload_hash = hashlib.sha256(payload_str.encode('utf-8')).digest()        
         signature_bytes = bytes.fromhex(signature)
         keypair = Keypair(hotkey)
-        return keypair.verify(payload_hash, signature_bytes)  # Verify against the hash
+        return keypair.verify(payload_hash, signature_bytes)
     except ValueError as e:
         logger.error(f"Invalid signature format: {e}")
         return False

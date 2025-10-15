@@ -390,46 +390,48 @@ async def forward_proxy_request(
     x_nonce: str = Header(default=""),
     x_signature: str = Header(default="")
 ) -> SignedResponse:
-    client_ip = get_client_ip(request)
     
+    client_ip = get_client_ip(request)    
     request_id = str(uuid.uuid4())
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
-    
-    if not authorization or not authorization.startswith("Bearer "):
-        logger.warning(f"Request {request_id} missing or invalid Authorization header")        
-        raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
-    
-    if 1==1:
-        payload_data = json.loads((await request.body()).decode('utf-8'))
-        verified = verify_miner_request(
-            hotkey=x_hotkey,
-            provider=x_provider,
-            nonce=x_nonce,
-            signature=x_signature,
-            payload=payload_data
-        )
-        if not verified:
-            logger.error(f"Request {request_id} failed signature verification for hotkey {x_hotkey}")
-            raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
-    
-    snapshot, _ = metagraph_manager.get_snapshot()
-    if not snapshot:
-        logger.error(f"Metagraph snapshot is empty for request {request_id}")
-        raise HTTPException(503, "Service unavailable: Metagraph data not ready")
 
-    if 1==1:
-        min_stake = MIN_ALPHA_STAKE
-        min_stake = 0
-        if not await check_hotkey_stake(x_hotkey, min_stake):
-            logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake ({min_stake}) in the metagraph")
-            raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {min_stake}")
-    if 1==2:
-        if not await check_request_ip(x_hotkey, client_ip):
-            logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
-            raise HTTPException(401, "INVALID REQUEST: IP MISMATCH")
-    
     try:
+
+        if not authorization or not authorization.startswith("Bearer "):
+            logger.warning(f"Request {request_id} missing or invalid Authorization header")
+            raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
+
+        if 1==1:
+            payload_data = json.loads((await request.body()).decode('utf-8'))
+            verified = verify_miner_request(
+                hotkey=x_hotkey,
+                provider=x_provider,
+                nonce=x_nonce,
+                signature=x_signature,
+                payload=payload_data
+            )
+            if not verified:
+                logger.error(f"Request {request_id} failed signature verification for hotkey {x_hotkey}")
+                #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
+        
+        snapshot, _ = metagraph_manager.get_snapshot()
+        if not snapshot:
+            logger.error(f"Metagraph snapshot is empty for request {request_id}")
+            raise HTTPException(503, "Service unavailable: Metagraph data not ready")
+
+        if 1==1:
+            min_stake = MIN_ALPHA_STAKE
+            min_stake = 0
+            if not await check_hotkey_stake(x_hotkey, min_stake):
+                logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake ({min_stake}) in the metagraph")
+                raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {min_stake}")
+        if 1==2:
+            if not await check_request_ip(x_hotkey, client_ip):
+                logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
+                raise HTTPException(401, "INVALID REQUEST: IP MISMATCH")
+    
+  
         provider = LLMProvider.from_str(x_provider)
         match provider:
             case LLMProvider.CHAT_GPT:
