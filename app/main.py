@@ -11,23 +11,25 @@ import logging
 import threading
 import tracemalloc
 from dotenv import load_dotenv
-
-from app.utils import is_valid_hotkey, load_version_info
 load_dotenv()
-from concurrent.futures import ThreadPoolExecutor
-from app.llm_providers import LLMProvider, LLMProviderStats
-from app.models import ChatCompletionRequest, SignedResponse
+
 from app.d1 import D1Handler
-from cachetools import TTLCache
 from app.html_templates import HTMLTemplates
+from app.llm_providers import LLMProvider, LLMProviderStats
+from app.utils import is_valid_hotkey, load_version_info
+from app.metagraph_sync_manager import MetagraphSyncManager
+from app.models import ChatCompletionRequest, SignedResponse
+
+from cachetools import TTLCache
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse, HTMLResponse
+from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from app.metagraph_sync_manager import MetagraphSyncManager
+
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -391,15 +393,15 @@ async def forward_proxy_request(
     request_id = str(uuid.uuid4())
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
-
-    snapshot, _ = metagraph_manager.get_snapshot()
-    if not snapshot:
-        logger.error(f"Metagraph snapshot is empty for request {request_id}")
-        raise HTTPException(503, "Service unavailable: Metagraph data not ready")
     
     if not authorization or not authorization.startswith("Bearer "):
         logger.warning(f"Request {request_id} missing or invalid Authorization header")        
         raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
+    
+    snapshot, _ = metagraph_manager.get_snapshot()
+    if not snapshot:
+        logger.error(f"Metagraph snapshot is empty for request {request_id}")
+        raise HTTPException(503, "Service unavailable: Metagraph data not ready")
 
     if 1==1:
         min_stake = MIN_ALPHA_STAKE
