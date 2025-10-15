@@ -2,6 +2,7 @@ import os
 import re
 import json
 import logging
+import hashlib
 from typing import List
 from app.models import SignedResponse
 from fiber import (
@@ -96,14 +97,14 @@ def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str,
             "nonce": nonce,
             "payload": payload
         }, separators=(',', ':'), sort_keys=True)
-        signature_bytes = bytes.fromhex(signature)        
+        
+        # Hash the payload_str to match client signing
+        payload_hash = hashlib.sha256(payload_str.encode('utf-8')).digest()
+        
+        signature_bytes = bytes.fromhex(signature)
         keypair = Keypair(hotkey)
-        return keypair.verify(
-            payload_str.encode('utf-8'),
-            signature_bytes
-        )
+        return keypair.verify(payload_hash, signature_bytes)  # Verify against the hash
     except ValueError as e:
-        # Handle invalid hex (e.g., non-hex characters or wrong length)
         logger.error(f"Invalid signature format: {e}")
         return False
     except Exception as e:
