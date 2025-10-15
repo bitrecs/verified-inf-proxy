@@ -88,16 +88,16 @@ def is_valid_hotkey(hotkey: str) -> bool:
     return re.match(pattern, hotkey) is not None
 
 
-def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str, payload: bytes) -> bool:
-    payload_str = json.dumps({
-        "hotkey": hotkey,
-        "provider": provider,
-        "nonce": nonce,
-        "payload": payload
-    }, separators=(',', ':'), sort_keys=True)
-    keypair = Keypair(hotkey)
-    return keypair.verify(
-        payload_str.encode('utf-8'),
-        signature.encode('utf-8')
-    )
-   
+def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str, payload: dict) -> bool:
+    try:
+        payload_str = json.dumps({
+            "hotkey": hotkey,
+            "provider": provider,
+            "nonce": nonce,
+            "payload": payload
+        }, separators=(',', ':'), sort_keys=True)
+        keypair = Keypair(hotkey)
+        return keypair.verify(payload_str.encode('utf-8'), signature.encode('utf-8'))
+    except Exception as e:
+        logger.error(f"Signature verification failed: {e}")
+        return False

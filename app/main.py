@@ -401,16 +401,17 @@ async def forward_proxy_request(
         raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
     
     if 1==1:
+        payload_data = json.loads((await request.body()).decode('utf-8'))
         verified = verify_miner_request(
             hotkey=x_hotkey,
             provider=x_provider,
             nonce=x_nonce,
             signature=x_signature,
-            payload=await request.body()
+            payload=payload_data
         )
         if not verified:
             logger.error(f"Request {request_id} failed signature verification for hotkey {x_hotkey}")
-            #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
+            raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
     
     snapshot, _ = metagraph_manager.get_snapshot()
     if not snapshot:
