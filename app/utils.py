@@ -96,8 +96,16 @@ def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str,
             "nonce": nonce,
             "payload": payload
         }, separators=(',', ':'), sort_keys=True)
+        signature_bytes = bytes.fromhex(signature)        
         keypair = Keypair(hotkey)
-        return keypair.verify(payload_str.encode('utf-8'), signature.encode('utf-8'))
+        return keypair.verify(
+            payload_str.encode('utf-8'),
+            signature_bytes
+        )
+    except ValueError as e:
+        # Handle invalid hex (e.g., non-hex characters or wrong length)
+        logger.error(f"Invalid signature format: {e}")
+        return False
     except Exception as e:
         logger.error(f"Signature verification failed: {e}")
         return False
