@@ -399,7 +399,7 @@ async def forward_proxy_request(
     try:
 
         if not authorization or not authorization.startswith("Bearer "):
-            logger.warning(f"Request {request_id} missing or invalid Authorization header")
+            logger.error(f"Request {request_id} missing or invalid Authorization header")
             raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
 
         if 1==1:
@@ -412,7 +412,7 @@ async def forward_proxy_request(
                 payload=payload_data
             )
             if not verified:
-                logger.error(f"Request {request_id} failed signature verification for hotkey {x_hotkey}")
+                logger.error(f"\033[31mRequest {request_id} failed signature verification for hotkey {x_hotkey} \033[0m")
                 #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
         
         snapshot, _ = metagraph_manager.get_snapshot()
@@ -539,7 +539,7 @@ async def verify_endpoint(
             base64.b64decode(response.signature), 
             json.dumps(response.proof, sort_keys=True).encode()
         )
-        logger.info(f"Signature valid for hotkey {response.proof.get('hotkey')}, unique_id {response.proof.get('unique_id')}")
+        logger.info(f"verify_endpoint Signature valid for hotkey {response.proof.get('hotkey')}, unique_id {response.proof.get('unique_id')}")
         return {
             "valid": True,
             "hotkey": response.proof.get("hotkey"),

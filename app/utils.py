@@ -6,7 +6,7 @@ import hashlib
 from typing import List
 from app.models import SignedResponse
 from fiber import (
-    Keypair,
+    Keypair
 )
 
 logger = logging.getLogger("verified")
