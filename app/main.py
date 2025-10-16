@@ -36,7 +36,7 @@ def get_platform():
     elif os.environ.get('DO_APP_ID'):
         return 'do'
     else:
-        return 'Unknown or Local'
+        return 'unknown'
 
 log_level = logging.INFO
 if get_platform() == 'gcp':   
@@ -56,7 +56,7 @@ verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 1800
 
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
-IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for recent verification
+IS_VERIFIED_HOUR_DELTA = 4  # Look back this many hours for recent verification
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
 
 client = httpx.AsyncClient(
