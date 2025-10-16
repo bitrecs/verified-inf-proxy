@@ -38,7 +38,7 @@ class LLMProvider(Enum):
             case "CEREBRAS":
                 return LLMProvider.CEREBRAS
             case "GROQ":
-                return LLMProvider.GROQ                
+                return LLMProvider.GROQ              
             case _:
                 raise ValueError("Unknown LLMPRovider server")
         

@@ -508,7 +508,7 @@ async def forward_proxy_request(
             str(provider)
         )
         app.state.total_requests += 1
-        logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds \033[0m")
+        logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")
         return signed_response
     
     except httpx.TimeoutException:
