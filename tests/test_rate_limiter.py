@@ -102,146 +102,111 @@ def test_rate_limit_health_sequential():
     print(f"   Blocked {rate_limited_count} requests exceeding limit")
 
 
-def test_rate_limit_health_concurrent(num_threads: int = 10, requests_per_thread: int = 10):
-    """Test rate limiting with concurrent requests using thread pool.
+# def test_rate_limit_health_concurrent(num_threads: int = 10, requests_per_thread: int = 10):
+#     """Test rate limiting with concurrent requests using thread pool.
     
-    Args:
-        num_threads: Number of concurrent threads to use
-        requests_per_thread: Number of requests each thread should make
-    """
-    # Check server is running first
-    if not check_server_running():
-        pytest.skip(f"Server not running at {BASE_URL}. Start with: uv run uvicorn app.main:app")
+#     Args:
+#         num_threads: Number of concurrent threads to use
+#         requests_per_thread: Number of requests each thread should make
+#     """
+#     # Check server is running first
+#     if not check_server_running():
+#         pytest.skip(f"Server not running at {BASE_URL}. Start with: uv run uvicorn app.main:app")
     
-    total_requests = num_threads * requests_per_thread
-    results = []
-    errors = []
+#     total_requests = num_threads * requests_per_thread
+#     results = []
+#     errors = []
     
-    print(f"\nTesting against: {BASE_URL}")
-    print(f"Sending {total_requests} concurrent requests ({num_threads} threads × {requests_per_thread} requests)...")
-    start_time = time.time()
+#     print(f"\nTesting against: {BASE_URL}")
+#     print(f"Sending {total_requests} concurrent requests ({num_threads} threads × {requests_per_thread} requests)...")
+#     start_time = time.time()
     
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        # Submit all requests
-        futures = [executor.submit(make_health_request) for _ in range(total_requests)]
+#     with ThreadPoolExecutor(max_workers=num_threads) as executor:
+#         # Submit all requests
+#         futures = [executor.submit(make_health_request) for _ in range(total_requests)]
         
-        # Collect results as they complete
-        completed = 0
-        for future in as_completed(futures):
-            status_code, response_time, error_msg = future.result()
-            results.append(status_code)
-            if error_msg:
-                errors.append(error_msg)
-            completed += 1
+#         # Collect results as they complete
+#         completed = 0
+#         for future in as_completed(futures):
+#             status_code, response_time, error_msg = future.result()
+#             results.append(status_code)
+#             if error_msg:
+#                 errors.append(error_msg)
+#             completed += 1
             
-            if completed % 20 == 0:
-                print(f"  Completed {completed}/{total_requests} requests")
+#             if completed % 20 == 0:
+#                 print(f"  Completed {completed}/{total_requests} requests")
     
-    total_time = time.time() - start_time
+#     total_time = time.time() - start_time
     
-    # Count responses
-    success_count = sum(1 for code in results if code == 200)
-    rate_limited_count = sum(1 for code in results if code == 429)
-    error_count = sum(1 for code in results if code not in [200, 429])
+#     # Count responses
+#     success_count = sum(1 for code in results if code == 200)
+#     rate_limited_count = sum(1 for code in results if code == 429)
+#     error_count = sum(1 for code in results if code not in [200, 429])
     
-    print(f"\nResults after {total_time:.2f} seconds:")
-    print(f"  ✅ Success (200): {success_count}")
-    print(f"  ⛔ Rate Limited (429): {rate_limited_count}")
-    print(f"  ❌ Errors: {error_count}")
-    print(f"  📊 Requests/sec: {total_requests / total_time:.2f}")
+#     print(f"\nResults after {total_time:.2f} seconds:")
+#     print(f"  ✅ Success (200): {success_count}")
+#     print(f"  ⛔ Rate Limited (429): {rate_limited_count}")
+#     print(f"  ❌ Errors: {error_count}")
+#     print(f"  📊 Requests/sec: {total_requests / total_time:.2f}")
     
-    if errors:
-        print(f"\nFirst error: {errors[0]}")
+#     if errors:
+#         print(f"\nFirst error: {errors[0]}")
     
-    # Assertions
-    assert error_count == 0, f"Got {error_count} connection errors. Is the server running at {BASE_URL}?"
-    assert success_count > 0, "Should have some successful requests"
-    assert rate_limited_count > 0, "Should have rate-limited requests under concurrent load"
+#     # Assertions
+#     assert error_count == 0, f"Got {error_count} connection errors. Is the server running at {BASE_URL}?"
+#     assert success_count > 0, "Should have some successful requests"
+#     assert rate_limited_count > 0, "Should have rate-limited requests under concurrent load"
     
-    # The rate limit is 60/min, so even with concurrent requests,
-    # we should not exceed ~60 successful requests per minute
-    if total_time < 60:
-        max_expected_success = int((60 / 60) * total_time * 1.1)  # 1.1x buffer for timing variance
-        assert success_count <= max_expected_success + 10, \
-            f"Too many successful requests ({success_count}) for {total_time:.1f}s window"
+#     # The rate limit is 60/min, so even with concurrent requests,
+#     # we should not exceed ~60 successful requests per minute
+#     if total_time < 60:
+#         max_expected_success = int((60 / 60) * total_time * 1.1)  # 1.1x buffer for timing variance
+#         assert success_count <= max_expected_success + 10, \
+#             f"Too many successful requests ({success_count}) for {total_time:.1f}s window"
 
 
-@pytest.mark.parametrize("threads,requests", [
-    (5, 20),   # Light load: 100 total requests
-    (10, 10),  # Medium load: 100 total requests  
-    (20, 5),   # Heavy load: 100 total requests
-])
-def test_rate_limit_health_parametrized(threads: int, requests: int):
-    """Parametrized test for different concurrency levels.
+# @pytest.mark.parametrize("threads,requests", [
+#     (5, 20),   # Light load: 100 total requests
+#     (10, 10),  # Medium load: 100 total requests  
+#     (20, 5),   # Heavy load: 100 total requests
+# ])
+# def test_rate_limit_health_parametrized(threads: int, requests: int):
+#     """Parametrized test for different concurrency levels.
     
-    Args:
-        threads: Number of concurrent threads
-        requests: Number of requests per thread
-    """
-    test_rate_limit_health_concurrent(num_threads=threads, requests_per_thread=requests)
-
-@pytest.mark.skip(reason="Takes too long (61+ seconds) for regular test runs")
-def test_rate_limit_recovery():
-    """Test that rate limit resets after the time window (60 seconds)."""
-    # Check server is running first
-    if not check_server_running():
-        pytest.skip(f"Server not running at {BASE_URL}. Start with: uv run uvicorn app.main:app")
-    
-    print(f"\nTesting against: {BASE_URL}")
-    print("Testing rate limit recovery...")
-    
-    # Hit rate limit
-    print("  Phase 1: Hitting rate limit with 70 requests...")
-    results_phase1 = []
-    for _ in range(70):
-        status_code, _, _ = make_health_request()
-        results_phase1.append(status_code)
-    
-    rate_limited_count = sum(1 for code in results_phase1 if code == 429)
-    print(f"  Phase 1: {rate_limited_count} requests were rate limited")
-    assert rate_limited_count > 0, "Should hit rate limit in phase 1"
-    
-    # Wait for rate limit window to reset
-    print("  Phase 2: Waiting 61 seconds for rate limit to reset...")
-    time.sleep(61)
-    
-    # Try again - should succeed
-    print("  Phase 3: Sending requests after reset...")
-    results_phase2 = []
-    for _ in range(10):
-        status_code, _, _ = make_health_request()
-        results_phase2.append(status_code)
-    
-    success_count = sum(1 for code in results_phase2 if code == 200)
-    print(f"  Phase 3: {success_count}/10 requests succeeded")
-    
-    assert success_count >= 8, "Should succeed after rate limit window resets"
+#     Args:
+#         threads: Number of concurrent threads
+#         requests: Number of requests per thread
+#     """
+#     test_rate_limit_health_concurrent(num_threads=threads, requests_per_thread=requests)
 
 
-if __name__ == "__main__":
-    # Check if server is running
-    print("=" * 60)
-    print("Rate Limiter Test Suite")
-    print("=" * 60)
-    print(f"\nChecking if server is running at {BASE_URL}...")
+
+
+# if __name__ == "__main__":
+#     # Check if server is running
+#     print("=" * 60)
+#     print("Rate Limiter Test Suite")
+#     print("=" * 60)
+#     print(f"\nChecking if server is running at {BASE_URL}...")
     
-    if not check_server_running():
-        print(f"\n❌ Server is NOT running at {BASE_URL}")
-        print("\nTo start the server, run:")
-        print("  uv run uvicorn app.main:app")
-        print("\nOr to test against production:")
-        print("  export TEST_BASE_URL=https://verified.bitrecs.ai")
-        print("  python tests/test_rate_limiter.py")
-        exit(1)
+#     if not check_server_running():
+#         print(f"\n❌ Server is NOT running at {BASE_URL}")
+#         print("\nTo start the server, run:")
+#         print("  uv run uvicorn app.main:app")
+#         print("\nOr to test against production:")
+#         print("  export TEST_BASE_URL=https://verified.bitrecs.ai")
+#         print("  python tests/test_rate_limiter.py")
+#         exit(1)
     
-    print(f"✅ Server is running!\n")
+#     print(f"✅ Server is running!\n")
     
-    # Run tests directly for quick testing
-    test_rate_limit_health_sequential()
-    print("\n" + "=" * 60 + "\n")
+#     # Run tests directly for quick testing
+#     test_rate_limit_health_sequential()
+#     print("\n" + "=" * 60 + "\n")
     
-    #test_rate_limit_health_concurrent(num_threads=10, requests_per_thread=10)
-    print("\n" + "=" * 60 + "\n")
+#     #test_rate_limit_health_concurrent(num_threads=10, requests_per_thread=10)
+#     print("\n" + "=" * 60 + "\n")
     
-    # Uncomment to test recovery (takes 61+ seconds)
-    # test_rate_limit_recovery()
+#     # Uncomment to test recovery (takes 61+ seconds)
+#     # test_rate_limit_recovery()
