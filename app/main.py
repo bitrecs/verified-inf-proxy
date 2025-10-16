@@ -387,8 +387,8 @@ async def forward_proxy_request(
     authorization: str = Header(),  
     x_hotkey: str = Header(),
     x_provider: str = Header(),
-    x_nonce: str = Header(default=""),
-    x_signature: str = Header(default="")
+    x_nonce: str = Header(),
+    x_signature: str = Header()
 ) -> SignedResponse:
     
     client_ip = get_client_ip(request)    
