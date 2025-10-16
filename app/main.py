@@ -451,6 +451,8 @@ async def forward_proxy_request(
                 url = "https://api.cerebras.ai/v1/chat/completions"
             case LLMProvider.GROK:  
                 url = "https://api.x.ai/v1/chat/completions"
+            case LLMProvider.CLAUDE:
+                url = "https://api.anthropic.com/v1/chat/completions"
             case _:
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
@@ -506,7 +508,7 @@ async def forward_proxy_request(
             str(provider)
         )
         app.state.total_requests += 1
-        logger.info(f"Request {request_id} took {duration:.2f} seconds")
+        logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds \033[0m")
         return signed_response
     
     except httpx.TimeoutException:
