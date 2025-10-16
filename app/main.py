@@ -221,12 +221,13 @@ async def read_root(request: Request):
     logger.info(f"Root endpoint accessed from IP {request_ip} at {ts}")
     return JSONResponse(
         status_code=200,
-        content={"message": "Bitrecs Verified Inference 🤝",
+        content={"message": "Bitrecs Verified 🤝 Inference ",
                  "ts": str(ts), 
                  "network": BT_NETWORK,
                  "uid": BT_NETUID,
                  "total_requests": app.state.total_requests,
-                 "exceptions": app.state.exceptions})
+                 "exceptions": app.state.exceptions, 
+                 "min_alpha_stake": MIN_ALPHA_STAKE})
 
 
 @app.get("/health")
