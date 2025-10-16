@@ -12,24 +12,21 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
-
 from app.d1 import D1Handler
 from app.html_templates import HTMLTemplates
 from app.llm_providers import LLMProvider, LLMProviderStats
 from app.utils import is_valid_hotkey, load_version_info, verify_miner_request
 from app.metagraph_sync_manager import MetagraphSyncManager
 from app.models import ChatCompletionRequest, SignedResponse
-
 from cachetools import TTLCache
-from contextlib import asynccontextmanager
-from fastapi.responses import JSONResponse, HTMLResponse
-from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict
+from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
+from fastapi.responses import JSONResponse, HTMLResponse
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -59,6 +56,7 @@ verified_display_cache_timestamp = None
 VERIFIED_DISPLAY_CACHE_DURATION = 1800
 
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
+IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for recent verification
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
 
 client = httpx.AsyncClient(
@@ -123,7 +121,11 @@ async def check_request_ip(
 
 
 def get_client_ip(request: Request) -> str:
-    logger.debug(f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, x-forwarded-for: {request.headers.get('x-forwarded-for')}, do-connecting-ip: {request.headers.get('do-connecting-ip')}")
+    logger.debug(
+        f"IP headers - x-real-ip: {request.headers.get('x-real-ip')}, "
+        f"x-forwarded-for: {request.headers.get('x-forwarded-for')}, "
+        f"do-connecting-ip: {request.headers.get('do-connecting-ip')}")
+     
     if "do-connecting-ip" in request.headers:
         return request.headers.get('do-connecting-ip').strip()
     if "x-forwarded-for" in request.headers:
@@ -144,8 +146,7 @@ async def refresh_provider_pings():
             logger.info("Refreshing provider pings cache")
             output = LLMProviderStats.print_all_providers_info_html()
             PROVIDER_PING_CACHE["provider_infos_html"] = output
-            logger.info(f"Provider pings cache updated: {len(output)} characters")
-            
+            logger.info(f"Provider pings cache updated: {len(output)} characters")            
         except Exception as e:
             logger.error(f"Error refreshing provider pings: {e}")
         await asyncio.sleep(1800)  # Refresh every 30 minutes
@@ -184,14 +185,12 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(60)
 
     app.state.restart_task = asyncio.create_task(restart_manager())
-    # create a task to refresh provider pings    
     app.state.refresh_task = asyncio.create_task(refresh_provider_pings())
 
     try:
         yield
     finally:
-        logger.info("Starting shutdown...")        
-
+        logger.info("Starting shutdown...")
         app.state.restart_task.cancel()
         app.state.refresh_task.cancel()
         try:
@@ -201,14 +200,15 @@ async def lifespan(app: FastAPI):
             pass
         
         # Stop metagraph manager
-        metagraph_manager.stop()        
-        await client.aclose()        
+        metagraph_manager.stop()
+        await client.aclose()
         logger.info("Shutting down D1 writer thread pool...")
-        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)        
+        app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
-app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
+#app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(debug=False, lifespan=lifespan)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
@@ -250,10 +250,6 @@ async def health(request: Request):
         logger.error(f"CRITICAL: Thread count {thread_count}")            
     
     current, peak = tracemalloc.get_traced_memory()
-    #memory_snapshot = tracemalloc.take_snapshot()
-    #top_stats = memory_snapshot.statistics('lineno')
-    #top_5_allocators = [str(stat) for stat in top_stats[:5]]  # Top 5 memory allocators by line 
-    
     version_file = load_version_info()
     return {
         "status": "healthy",
@@ -265,8 +261,7 @@ async def health(request: Request):
         "metagraph_age_seconds": round(time.time() - synced_at, 2) if synced_at else None,        
         "thread_pool_workers": len(app.state.thread_pool._threads) if hasattr(app.state.thread_pool, '_threads') else 0,
         "memory_current_mb": round(current / 1024 / 1024, 2),
-        "memory_peak_mb": round(peak / 1024 / 1024, 2),
-        #"top_memory_allocators": top_5_allocators,
+        "memory_peak_mb": round(peak / 1024 / 1024, 2),        
         "message": message,
         "version": version_file.strip() if version_file else "N/A"
     }
@@ -291,14 +286,12 @@ async def verified_log(request: Request):
     global verified_display_cache, verified_display_cache_timestamp
     request_ip = get_client_ip(request)
     ts = str(int(time.time()))    
-    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
-    
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
     current_time = time.time()
     if (verified_display_cache is not None and
         verified_display_cache_timestamp is not None and
         (current_time - verified_display_cache_timestamp) < VERIFIED_DISPLAY_CACHE_DURATION):        
-        return HTMLResponse(content=verified_display_cache)
-    
+        return HTMLResponse(content=verified_display_cache)    
     # Fetch fresh data
     verified = await d1_client.select_all_signed_responses(top=250)    
     html_content = HTMLTemplates.render_verified_display(
@@ -319,14 +312,12 @@ async def verified_log(request: Request):
 async def provider_log(request: Request):
     request_ip = get_client_ip(request)
     logger.info(f"providers endpoint accessed from IP {request_ip}")
-
     #its already cached
     cache_key = "provider_infos_html"
     if cache_key in PROVIDER_PING_CACHE:
         logger.info(f"providers endpoint accessed from IP {request_ip} - using cached data")
         infos = PROVIDER_PING_CACHE[cache_key]
         return HTMLResponse(content=infos)
-
     logging.warning("Cache Broken")
     return HTMLResponse(content="<pre>Cache Empty</pre>")
 
@@ -339,16 +330,14 @@ async def is_verified(request: Request, hotkey: str):
     if not hotkey:
         raise HTTPException(400, "Missing hotkey parameter")
     if not is_valid_hotkey(hotkey):
-        raise HTTPException(400, "Invalid hotkey format")
+        raise HTTPException(400, "Invalid hotkey format")    
     
-    # Check cache first
     cached_result = IS_VERIFIED_CACHE.get(hotkey)
     if cached_result:
         logger.info(f"Cache hit for hotkey {hotkey}")
         return JSONResponse(status_code=200, content=cached_result)
-
-    hour_delta = 8
-    since_date = datetime.now(timezone.utc) - timedelta(hours=hour_delta)
+    
+    since_date = datetime.now(timezone.utc) - timedelta(hours=IS_VERIFIED_HOUR_DELTA)
     latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=1)
     if not latest:
         result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}
@@ -367,15 +356,14 @@ async def is_verified(request: Request, hotkey: str):
                 result = {"verified": False, "message": "Invalid timestamp format"}
             else:
                 age_seconds = (datetime.now(timezone.utc) - timestamp).total_seconds()
-                if age_seconds > hour_delta * 3600:
-                    result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {hour_delta} hours"}
+                if age_seconds > IS_VERIFIED_HOUR_DELTA * 3600:
+                    result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {IS_VERIFIED_HOUR_DELTA} hours"}
                 else:
-                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has a recent verified response (since {hour_delta} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
+                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has a recent verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
     
-    # Cache the result
     IS_VERIFIED_CACHE[hotkey] = result
-    logger.info(f"\033[32mCached result for hotkey {hotkey}: {result['verified']} \033[0m")
-    return JSONResponse(status_code=200, content=result)  
+    logger.info(f"\033[32mCached result for hotkey {hotkey}: {result['verified']}\033[0m")
+    return JSONResponse(status_code=200, content=result)
 
 
 
@@ -397,7 +385,6 @@ async def forward_proxy_request(
     st = time.perf_counter()
 
     try:
-
         if not authorization or not authorization.startswith("Bearer "):
             logger.error(f"Request {request_id} missing or invalid Authorization header")
             raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
