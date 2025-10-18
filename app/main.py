@@ -213,18 +213,14 @@ app_version = version_info if version_info else "0.8.8"
 
 app = FastAPI(
     title="Bitrecs Verified Inference",
-    version=app_version,  # Dynamic version from Git SHA or static
+    version=app_version,
     description="Proxy for verified inference with Bittensor integration, providing secure LLM completions.",
     debug=False,
     lifespan=lifespan,
     # openapi_url="/api-docs.json"  # Optional: Change OpenAPI JSON path
 )
-#app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
-#app = FastAPI(debug=False, lifespan=lifespan)
-
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
-
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -232,8 +228,11 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    # Add HSTS if using HTTPS (adjust for your setup)
-    # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'none'; object-src 'none';"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     return response
 
 
