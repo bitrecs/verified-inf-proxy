@@ -207,6 +207,20 @@ async def lifespan(app: FastAPI):
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
 
+
+version_info = load_version_info()
+app_version = version_info if version_info else "0.8.8"
+
+app = FastAPI(
+    title="Bitrecs Verified Inference",
+    version=app_version,  # Dynamic version from Git SHA or static
+    description="Proxy for verified inference with Bittensor integration, providing secure LLM completions.",
+    debug=False,
+    lifespan=lifespan,
+    # openapi_url="/api-docs.json"  # Optional: Change OpenAPI JSON path
+)
+
+
 #app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
 app = FastAPI(debug=False, lifespan=lifespan)
 app.state.limiter = limiter
