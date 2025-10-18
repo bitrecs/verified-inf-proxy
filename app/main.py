@@ -219,10 +219,9 @@ app = FastAPI(
     lifespan=lifespan,
     # openapi_url="/api-docs.json"  # Optional: Change OpenAPI JSON path
 )
-
-
 #app = FastAPI(debug=False, lifespan=lifespan, docs_url=None, redoc_url=None)
-app = FastAPI(debug=False, lifespan=lifespan)
+#app = FastAPI(debug=False, lifespan=lifespan)
+
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
