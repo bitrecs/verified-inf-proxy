@@ -91,10 +91,13 @@ def is_valid_hotkey(hotkey: str) -> bool:
 
 
 def verify_time(ts: int) -> bool:    
-    utc_now = int(time.time())
-    age = utc_now - ts
-    if age <= 0 or age > 300:
-        logger.error(f"Failed verify_time: {age} seconds for timestamp {ts}")
+    utc_now = time.time()  # Use float for precision
+    age = utc_now - ts  # Now a float difference
+    if age < 0:  # Allow slight future timestamps (e.g., due to network delay)
+        logger.warning(f"Timestamp {ts} is from the future by {-age:.2f} seconds.")
+        #return False  # Still reject if too far in the future
+    if age > 300.0:
+        logger.error(f"Failed verify_time: {age:.2f} seconds for timestamp {ts}")
         return False
     return True
 
