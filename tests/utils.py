@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import secrets
+import time
 import httpx
 import json
 from typing import Any, Dict, Tuple
@@ -26,9 +27,11 @@ async def call_proxy_server_with_signing(
         "x-hotkey": hotkey,
         "x-provider": provider        
     }
-    signature, nonce = sign_verified_request(keypair, provider, request)
+    ts = str(int(time.time()))
+    signature, nonce = sign_verified_request(keypair, provider, request, ts)
     headers["x-signature"] = signature
     headers["x-nonce"] = nonce
+    headers["x-timestamp"] = str(ts)
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
@@ -61,13 +64,14 @@ def verify_signature(
         return False
 
 
-def sign_verified_request(miner_keypair: Keypair, provider: str, payload: dict) -> Tuple[str, str]:
+def sign_verified_request(miner_keypair: Keypair, provider: str, payload: dict, ts: str) -> Tuple[str, str]:
     nonce = secrets.token_hex(16)    
     payload_str = json.dumps({
         "hotkey": miner_keypair.ss58_address,
         "provider": provider,
         "nonce": nonce,
-        "payload": payload
+        "payload": payload,
+        "timestamp": ts
     }, separators=(',', ':'), sort_keys=True)
     payload_hash = hashlib.sha256(payload_str.encode('utf-8')).digest()    
     signature_bytes = miner_keypair.sign(payload_hash)
