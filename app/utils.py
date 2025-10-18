@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import json
 import logging
 import hashlib
@@ -87,6 +88,15 @@ def load_version_info() -> str:
 def is_valid_hotkey(hotkey: str) -> bool:
     pattern = r'^5[1-9A-Za-z]{47}$'
     return re.match(pattern, hotkey) is not None
+
+
+def verify_time(ts: int) -> bool:    
+    utc_now = int(time.time())
+    age = utc_now - ts
+    if age <= 0 or age > 300:
+        logger.error(f"Failed verify_time: {age} seconds for timestamp {ts}")
+        return False
+    return True
 
 
 def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str, payload: dict, ts: str) -> bool:

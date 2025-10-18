@@ -15,7 +15,7 @@ load_dotenv()
 from app.d1 import D1Handler
 from app.html_templates import HTMLTemplates
 from app.llm_providers import LLMProvider, LLMProviderStats
-from app.utils import is_valid_hotkey, load_version_info, verify_miner_request
+from app.utils import is_valid_hotkey, load_version_info, verify_miner_request, verify_time
 from app.metagraph_sync_manager import MetagraphSyncManager
 from app.models import ChatCompletionRequest, SignedResponse
 from cachetools import TTLCache
@@ -401,7 +401,11 @@ async def forward_proxy_request(
         if not authorization or not authorization.startswith("Bearer "):
             logger.error(f"Request {request_id} missing or invalid Authorization header")
             raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
-
+        
+        if 1==1:
+            if not verify_time(int(x_timestamp)):
+                logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
+                raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
         if 1==1:
             payload_data = json.loads((await request.body()).decode('utf-8'))
             verified = verify_miner_request(
