@@ -415,6 +415,8 @@ async def forward_proxy_request(
             if not verified:
                 logger.error(f"\033[31mRequest {request_id} failed signature verification for hotkey {x_hotkey} \033[0m")
                 #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
+            else:
+                logger.info(f"\033[32mRequest {request_id} passed signature verification for hotkey {x_hotkey} \033[0m")
         
         snapshot, _ = metagraph_manager.get_snapshot()
         if not snapshot:
