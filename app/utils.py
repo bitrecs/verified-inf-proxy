@@ -89,15 +89,16 @@ def is_valid_hotkey(hotkey: str) -> bool:
     return re.match(pattern, hotkey) is not None
 
 
-def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str, payload: dict) -> bool:
+def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str, payload: dict, ts: str) -> bool:
     try:
         payload_str = json.dumps({
             "hotkey": hotkey,
             "provider": provider,
             "nonce": nonce,
-            "payload": payload
+            "payload": payload,
+            "timestamp": ts
         }, separators=(',', ':'), sort_keys=True)
-        payload_hash = hashlib.sha256(payload_str.encode('utf-8')).digest()        
+        payload_hash = hashlib.sha256(payload_str.encode('utf-8')).digest()
         signature_bytes = bytes.fromhex(signature)
         keypair = Keypair(hotkey)
         return keypair.verify(payload_hash, signature_bytes)

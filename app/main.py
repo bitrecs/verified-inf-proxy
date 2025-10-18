@@ -388,7 +388,8 @@ async def forward_proxy_request(
     x_hotkey: str = Header(),
     x_provider: str = Header(),
     x_nonce: str = Header(),
-    x_signature: str = Header()
+    x_signature: str = Header(),
+    x_timestamp: str = Header()
 ) -> SignedResponse:
     
     client_ip = get_client_ip(request)    
@@ -408,7 +409,8 @@ async def forward_proxy_request(
                 provider=x_provider,
                 nonce=x_nonce,
                 signature=x_signature,
-                payload=payload_data
+                payload=payload_data,
+                ts=x_timestamp
             )
             if not verified:
                 logger.error(f"\033[31mRequest {request_id} failed signature verification for hotkey {x_hotkey} \033[0m")
