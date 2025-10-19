@@ -270,7 +270,7 @@ class HTMLTemplates:
             <div class="header">
                 <h1>
                     <img src="https://www.bitrecs.ai/assets/logo/x7k9m2n8/whiteonblack.png" alt="BitRecs Logo">
-                    Verified Inference Log
+                    Bitrecs Verified Inference
                 </h1>
                 <div class="stats">                   
                     <div class="stat-item">
