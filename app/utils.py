@@ -90,16 +90,29 @@ def is_valid_hotkey(hotkey: str) -> bool:
     return re.match(pattern, hotkey) is not None
 
 
-def verify_time(ts: int) -> bool:    
-    utc_now = time.time()  # Use float for precision
-    age = utc_now - ts  # Now a float difference
-    if age < 0:  # Allow slight future timestamps (e.g., due to network delay)
-        logger.warning(f"Timestamp {ts} is from the future by {-age:.2f} seconds.")
-        #return False  # Still reject if too far in the future
-    if age > 300.0:
-        logger.error(f"Failed verify_time: {age:.2f} seconds for timestamp {ts}")
+def verify_time(ts: int) -> bool:
+    try:
+        # Basic input validation
+        if not isinstance(ts, (int, float)) or ts < 0 or ts > 2**31:  # Reject negative or unreasonably large timestamps
+            logger.error(f"Invalid timestamp: {ts}")
+            return False
+        
+        utc_now = time.time()  # Use float for precision
+        age = utc_now - ts  # Age in seconds (negative if future)
+        
+        # Allow a small window for future timestamps (e.g., 5 seconds for clock skew/network delay)
+        if age < -5.0:
+            logger.error(f"Timestamp {ts} is too far in the future: {-age:.2f} seconds")
+            return False
+        # Reject timestamps older than 5 minutes
+        if age > 300.0:
+            logger.error(f"Timestamp {ts} is too old: {age:.2f} seconds ago")
+            return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error in verify_time for ts={ts}: {e}")
         return False
-    return True
 
 
 def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str, payload: dict, ts: str) -> bool:
