@@ -187,6 +187,13 @@ class HTMLTemplates:
                 max-width: 120px;
                 word-break: break-all;
             }}
+            .mainnet {{
+                color: lawngreen;
+            }}
+            
+            .testnet {{
+                color: orange;
+            }}
             
             /* Mobile responsive styles */
             @media (max-width: 768px) {{
@@ -263,13 +270,7 @@ class HTMLTemplates:
                     font-size: 12px;
                 }}
 
-                .mainnet{{
-                    color: lawngreen;
-                }}
-                
-                .testnet{{
-                    color: orange;
-                }}
+            
             }}
         </style>
     </head>
