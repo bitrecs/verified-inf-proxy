@@ -442,11 +442,11 @@ async def forward_proxy_request(
             min_stake = MIN_ALPHA_STAKE
             min_stake = 0
             if not await check_hotkey_stake(x_hotkey, min_stake):
-                logger.warning(f"Hotkey {x_hotkey} does not have sufficient stake ({min_stake}) in the metagraph")
+                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({min_stake}) in the metagraph for request {request_id} \033[0m")
                 raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {min_stake}")
         if 1==2:
             if not await check_request_ip(x_hotkey, client_ip):
-                logger.warning(f"Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP")
+                logger.warning(f"\033[31mRequest IP {client_ip} does not match hotkey {x_hotkey}'s axon IP for request {request_id} \033[0m")
                 raise HTTPException(401, "INVALID REQUEST: IP MISMATCH")
     
   
