@@ -68,8 +68,8 @@ client = httpx.AsyncClient(
     )
 )
 
-BT_NETWORK = os.environ.get("BT_NETWORK", "test")
-BT_NETUID = int(os.environ.get("BT_NETUID", 296))
+BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
+BT_NETUID = int(os.environ.get("BT_NETUID", 122))
 B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
 if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
