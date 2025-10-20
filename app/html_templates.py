@@ -270,6 +270,7 @@ class HTMLTemplates:
                 .testnet{{
                     color: orange;
                 }}
+            }}
         </style>
     </head>
     <body>
