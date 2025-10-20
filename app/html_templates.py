@@ -262,7 +262,14 @@ class HTMLTemplates:
                 .timestamp, .model, .duration {{
                     font-size: 12px;
                 }}
-            }}
+
+                .mainnet{{
+                    color: lawngreen;
+                }}
+                
+                .testnet{{
+                    color: orange;
+                }}
         </style>
     </head>
     <body>
@@ -275,7 +282,7 @@ class HTMLTemplates:
                 <div class="stats">                   
                     <div class="stat-item">
                         <span class="stat-label">Network:</span>
-                        <span>{bt_network}</span>
+                        <span class="mainnet">{bt_network}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Netuid:</span>
