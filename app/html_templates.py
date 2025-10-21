@@ -187,14 +187,32 @@ class HTMLTemplates:
                 max-width: 120px;
                 word-break: break-all;
             }}
-
             
-            .mainnet{{
+            .finney {{
                 color: lawngreen;
             }}
             
-            .testnet{{
+            .test {{
                 color: orange;
+            }}
+            
+            /* Footer styles */
+            .footer {{
+                margin-top: 20px;
+                padding: 15px;
+                background: #161b22;
+                border-top: 1px solid #30363d;
+                border-radius: 6px;
+                text-align: center;
+                font-size: 14px;
+                color: #8b949e;
+            }}
+            .footer a {{
+                color: #58a6ff;
+                text-decoration: none;
+            }}
+            .footer a:hover {{
+                text-decoration: underline;
             }}
             
             /* Mobile responsive styles */
@@ -271,7 +289,11 @@ class HTMLTemplates:
                 .timestamp, .model, .duration {{
                     font-size: 12px;
                 }}
-
+                
+                .footer {{
+                    font-size: 12px;
+                    padding: 10px;
+                }}
             }}
         </style>
     </head>
@@ -285,7 +307,7 @@ class HTMLTemplates:
                 <div class="stats">                   
                     <div class="stat-item">
                         <span class="stat-label">Network:</span>
-                        <span class="testnet">{bt_network}</span>
+                        <span class="{bt_network}">{bt_network}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Netuid:</span>
@@ -315,6 +337,13 @@ class HTMLTemplates:
 {rows_html}
                     </tbody>
                 </table>
+            </div>            
+            
+            <div class="footer">                
+                <p> <a href="https://bitrecs.ai" target="_blank" rel="noopener noreferrer">Bitrecs</a>
+                | <a href="https://dashboard.bitrecs.ai" target="_blank" rel="noopener noreferrer">Dashboard</a> | <a href="https://github.com/bitrecs/" target="_blank" rel="noopener noreferrer">Github</a>
+                </p>
+                <p>&copy; 2025 Bitrecs. All rights reserved.<p>
             </div>
         </div>
     </body>
