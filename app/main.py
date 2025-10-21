@@ -75,7 +75,7 @@ if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
-MIN_ALPHA_STAKE = 100  # Minimum stake for alpha access
+MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
 
 CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
 CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
@@ -411,39 +411,36 @@ async def forward_proxy_request(
     try:
         if not authorization or not authorization.startswith("Bearer "):
             logger.error(f"Request {request_id} missing or invalid Authorization header")
-            raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
+            raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")        
         
-        if 1==1:
-            if not verify_time(int(x_timestamp)):
-                logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
-                raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
-        if 1==1:
-            payload_data = json.loads((await request.body()).decode('utf-8'))
-            verified = verify_miner_request(
-                hotkey=x_hotkey,
-                provider=x_provider,
-                nonce=x_nonce,
-                signature=x_signature,
-                payload=payload_data,
-                ts=x_timestamp
-            )
-            if not verified:
-                logger.error(f"\033[31mRequest {request_id} failed signature verification for hotkey {x_hotkey} \033[0m")
-                #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
-            else:
-                logger.info(f"\033[32mRequest {request_id} passed signature verification for hotkey {x_hotkey} \033[0m")
+        if not verify_time(int(x_timestamp)):
+            logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
+            raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
+        
+        payload_data = json.loads((await request.body()).decode('utf-8'))
+        verified = verify_miner_request(
+            hotkey=x_hotkey,
+            provider=x_provider,
+            nonce=x_nonce,
+            signature=x_signature,
+            payload=payload_data,
+            ts=x_timestamp
+        )
+        if not verified:
+            logger.error(f"\033[31mRequest {request_id} failed signature verification for hotkey {x_hotkey} \033[0m")
+            #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
+        else:
+            logger.info(f"\033[32mRequest {request_id} passed signature verification for hotkey {x_hotkey} \033[0m")
         
         snapshot, _ = metagraph_manager.get_snapshot()
         if not snapshot:
             logger.error(f"Metagraph snapshot is empty for request {request_id}")
             raise HTTPException(503, "Service unavailable: Metagraph data not ready")
 
-        if 1==1:
-            min_stake = MIN_ALPHA_STAKE
-            min_stake = 0
-            if not await check_hotkey_stake(x_hotkey, min_stake):                
-                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({min_stake}) in the metagraph for request {request_id} \033[0m")
-                raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {min_stake}")
+        if 1==1:            
+            if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
+                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
+                raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
         if 1==2:
             if not await check_request_ip(x_hotkey, client_ip):
                 logger.warning(f"\033[31m Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP for request {request_id} \033[0m")
