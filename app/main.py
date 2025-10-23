@@ -489,7 +489,7 @@ async def forward_proxy_request(
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
         proof = {
-            "request_hash": hashlib.sha256(json.dumps(completion_request.model_dump()).encode()).hexdigest(),
+            "request_hash": hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest(),
             "response_hash": hashlib.sha256(response.content).hexdigest(),
             "hotkey": x_hotkey,
             "model": completion_request.model,
