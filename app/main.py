@@ -496,13 +496,16 @@ async def forward_proxy_request(
             "provider": str(provider),
             "unique_id": request_id
         }
-        
-        serialized_proof = json.dumps(proof, sort_keys=True).encode()
-        signature = PRIVATE_KEY.sign(serialized_proof)
-        
-        # Time metadata (NOT signed)
+
         timestamp = datetime.now(timezone.utc).isoformat()
-        ttl = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        ttl = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()        
+        signed_data = {
+            "proof": proof,
+            "timestamp": timestamp,
+            "ttl": ttl
+        }
+        serialized_data = json.dumps(signed_data, sort_keys=True).encode()
+        signature = PRIVATE_KEY.sign(serialized_data)
         signed_response = SignedResponse(
             response=response.json(),
             proof=proof,
