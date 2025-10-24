@@ -52,12 +52,19 @@ def verify_signature(
     """Verify the signature of the response."""
     proof = response["proof"]
     signature_b64 = response["signature"]
+    timestamp = response["timestamp"]
+    ttl = response["ttl"]
+    signed_data = {
+        "proof": proof,
+        "timestamp": timestamp,
+        "ttl": ttl
+    }
+    serialized_data = json.dumps(signed_data, sort_keys=True).encode()
     print(f"Proof: {proof}")
     print(f"Signature (base64): {signature_b64}")
-    signature_bytes = base64.b64decode(signature_b64)
-    serialized_proof = json.dumps(proof, sort_keys=True).encode()
+    signature_bytes = base64.b64decode(signature_b64)    
     try:
-        public_key.verify(signature_bytes, serialized_proof)
+        public_key.verify(signature_bytes, serialized_data)
         return True
     except Exception as e:
         print(f"Verification failed: {e}")
