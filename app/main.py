@@ -518,7 +518,7 @@ async def forward_proxy_request(
         # Write to D1 in background thread
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
-            app.state.thread_pool,  # Use the bounded pool
+            app.state.thread_pool,
             d1_client.insert_signed_response,
             signed_response,
             request_id,
@@ -563,7 +563,7 @@ async def verify_endpoint(
         return {
             "valid": True,
             "hotkey": response.proof.get("hotkey"),
-            "timestamp": response.timestamp,  # Use response.timestamp instead of response.proof.get("timestamp")
+            "timestamp": response.timestamp,
             "model": response.proof.get("model"),
             "provider": response.proof.get("provider"),
             "unique_id": response.proof.get("unique_id")
