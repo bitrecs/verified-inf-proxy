@@ -53,7 +53,7 @@ METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 
 verified_display_cache = None
 verified_display_cache_timestamp = None
-VERIFIED_DISPLAY_CACHE_DURATION = 1800
+VERIFIED_DISPLAY_CACHE_DURATION = 300
 
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
 IS_VERIFIED_HOUR_DELTA = 4  # Look back this many hours for recent verification
