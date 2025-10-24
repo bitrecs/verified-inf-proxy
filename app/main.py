@@ -554,16 +554,24 @@ async def verify_endpoint(
 ) -> Dict[str, Union[bool, str, None]]:
     client_ip = get_client_ip(request)
     logger.info(f"Verify endpoint called from IP: {client_ip}")
-    try:        
-        PUBLIC_KEY.verify(
-            base64.b64decode(response.signature), 
-            json.dumps(response.proof, sort_keys=True).encode()
-        )
+    try:
+        proof = response.proof
+        timestamp = response.timestamp
+        ttl = response.ttl 
+        signed_data = {
+            "proof": proof,
+            "timestamp": timestamp,
+            "ttl": ttl
+        }
+        serialized_data = json.dumps(signed_data, sort_keys=True).encode()
+        signature_b64 = response.signature
+        signature_bytes = base64.b64decode(signature_b64)
+        PUBLIC_KEY.verify(signature_bytes, serialized_data)
         logger.info(f"verify_endpoint Signature valid for hotkey {response.proof.get('hotkey')}, unique_id {response.proof.get('unique_id')}")
         return {
             "valid": True,
             "hotkey": response.proof.get("hotkey"),
-            "timestamp": response.timestamp,
+            "timestamp": response.timestamp,  # Use response.timestamp instead of response.proof.get("timestamp")
             "model": response.proof.get("model"),
             "provider": response.proof.get("provider"),
             "unique_id": response.proof.get("unique_id")
