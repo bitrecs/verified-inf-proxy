@@ -487,7 +487,7 @@ async def forward_proxy_request(
             logger.error(f"Response content: {response.text}")
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
-        proof = {            
+        proof = {
             "request_hash": hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest(),
             "response_hash": hashlib.sha256(response.content).hexdigest(),
             "hotkey": x_hotkey,
@@ -495,13 +495,16 @@ async def forward_proxy_request(
             "provider": str(provider),
             "unique_id": request_id
         }
-        
-        serialized_proof = json.dumps(proof, sort_keys=True).encode()
-        signature = PRIVATE_KEY.sign(serialized_proof)
-        
-        # Time metadata (NOT signed)
+
         timestamp = datetime.now(timezone.utc).isoformat()
-        ttl = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        ttl = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()        
+        signed_data = {
+            "proof": proof,
+            "timestamp": timestamp,
+            "ttl": ttl
+        }
+        serialized_data = json.dumps(signed_data, sort_keys=True).encode()
+        signature = PRIVATE_KEY.sign(serialized_data)
         signed_response = SignedResponse(
             response=response.json(),
             proof=proof,
