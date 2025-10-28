@@ -36,8 +36,7 @@ class D1Handler:
             resp.raise_for_status()
             result = resp.json()
             if result.get('success'):
-                rows = result['result'][0]['results']
-                # Reconstruct 'proof' dict from individual fields for each row
+                rows = result['result'][0]['results']                
                 for row in rows:
                     row['proof'] = {                        
                         'request_hash': row.get('request_hash'),
@@ -75,8 +74,7 @@ class D1Handler:
             resp.raise_for_status()
             result = resp.json()
             if result.get('success'):
-                rows = result['result'][0]['results']
-                # Reconstruct 'proof' dict from individual fields for each row
+                rows = result['result'][0]['results']                
                 for row in rows:
                     row['proof'] = {                        
                         'request_hash': row.get('request_hash'),
@@ -133,13 +131,4 @@ class D1Handler:
         except Exception as e:
             print(f"Error inserting SignedResponse: {e}")
             logger.error(f"Error inserting SignedResponse: {e}")
-            return False
-
-    # def insert_multiple_signed_responses(self, responses: List[SignedResponse], request_ids: List[str] = None):
-    #     """Insert multiple SignedResponse objects into D1 (append-only). request_ids optional."""
-    #     results = []
-    #     for i, response in enumerate(responses):
-    #         req_id = request_ids[i] if request_ids and i < len(request_ids) else None
-    #         result = self.insert_signed_response(response, req_id)
-    #         results.append(result)
-    #     return results
+            return False   

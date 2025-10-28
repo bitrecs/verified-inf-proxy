@@ -436,16 +436,10 @@ async def forward_proxy_request(
         if not snapshot:
             logger.error(f"Metagraph snapshot is empty for request {request_id}")
             raise HTTPException(503, "Service unavailable: Metagraph data not ready")
-
-        if 1==1:            
-            if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
-                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
-                raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
-        if 1==2:
-            if not await check_request_ip(x_hotkey, client_ip):
-                logger.warning(f"\033[31m Request IP {client_ip} does not match hotkey {x_hotkey}'s axon IP for request {request_id} \033[0m")
-                raise HTTPException(401, "INVALID REQUEST: IP MISMATCH")
-    
+        
+        if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
+            logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
+            raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
   
         provider = LLMProvider.from_str(x_provider)
         match provider:
@@ -514,8 +508,7 @@ async def forward_proxy_request(
         )
         et = time.perf_counter()
         duration = et - st
-
-        # Write to D1 in background thread
+        
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
             app.state.thread_pool,
@@ -571,7 +564,7 @@ async def verify_endpoint(
         return {
             "valid": True,
             "hotkey": response.proof.get("hotkey"),
-            "timestamp": response.timestamp,  # Use response.timestamp instead of response.proof.get("timestamp")
+            "timestamp": response.timestamp,
             "model": response.proof.get("model"),
             "provider": response.proof.get("provider"),
             "unique_id": response.proof.get("unique_id")
