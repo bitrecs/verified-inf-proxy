@@ -8,6 +8,7 @@ class HTMLTemplates:
     def render_verified_display(verified: List[Dict[str, Any]], bt_network: str, bt_netuid: int) -> str:
         """Render the verified responses display page."""
         rows_html = ""
+        miners = set()
         for item in verified:
             timestamp = item.get('timestamp', 'N/A')
             hotkey = item.get('hotkey', 'N/A')
@@ -15,6 +16,7 @@ class HTMLTemplates:
             duration = item.get('duration', 'N/A') or 'N/A'
             signature = item.get('signature', 'N/A')
             provider = item.get('provider', 'N/A')
+            miners.add(hotkey)
             
             # Parse response_json to extract content
             response_content = 'N/A'
@@ -63,6 +65,7 @@ class HTMLTemplates:
         escaped_bt_network = html.escape(str(bt_network))
         escaped_bt_netuid = html.escape(str(bt_netuid))
         escaped_len_verified = html.escape(str(len(verified)))
+        escaped_len_miners = html.escape(str(len(miners)))
 
         return f"""
     <!DOCTYPE html>
@@ -328,10 +331,10 @@ class HTMLTemplates:
                     <div class="stat-item">
                         <span class="stat-label">Netuid:</span>
                         <span>{escaped_bt_netuid}</span>
-                    </div>
-                     <div class="stat-item">
-                        <span class="stat-label">Samples:</span>
-                        <span>{escaped_len_verified}</span>
+                    </div>                  
+                    <div class="stat-item">
+                        <span class="stat-label">Verified Miners:</span>
+                        <span>{escaped_len_miners}</span>
                     </div>
                 </div>
             </div>
@@ -355,7 +358,9 @@ class HTMLTemplates:
                 </table>
             </div>            
             
-            <div class="footer">                
+            <div class="footer">      
+                <p>
+                Rows: {escaped_len_verified}
                 <p> <a href="https://bitrecs.ai" target="_blank" rel="noopener noreferrer">Bitrecs</a>
                 | <a href="https://dashboard.bitrecs.ai" target="_blank" rel="noopener noreferrer">Dashboard</a> | <a href="https://github.com/bitrecs/" target="_blank" rel="noopener noreferrer">Github</a>
                 </p>
