@@ -3,7 +3,8 @@ import json
 from typing import List, Dict, Any
 
 
-class HTMLTemplates:
+class HTMLLog:
+
     @staticmethod
     def render_verified_display(verified: List[Dict[str, Any]], bt_network: str, bt_netuid: int) -> str:
         """Render the verified responses display page."""
@@ -233,6 +234,19 @@ class HTMLTemplates:
             .footer a:hover {{
                 text-decoration: underline;
             }}
+            .nav-links {{
+                margin: 10px 0;
+                text-align: center;
+                font-size: 14px;
+                color: #8b949e;
+            }}
+            .nav-link {{
+                color: #58a6ff;
+                text-decoration: none;
+            }}
+            .nav-link:hover {{
+                text-decoration: underline;
+            }}
             
             /* Mobile responsive styles */
             @media (max-width: 768px) {{
@@ -313,6 +327,7 @@ class HTMLTemplates:
                     font-size: 12px;
                     padding: 10px;
                 }}
+              
             }}
         </style>
     </head>
@@ -326,7 +341,7 @@ class HTMLTemplates:
                 <div class="stats">                   
                     <div class="stat-item">
                         <span class="stat-label">Network:</span>
-                        <span class="{escaped_bt_network}">{escaped_bt_network}</span>
+                        <span class="{bt_network}">{escaped_bt_network}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Netuid:</span>
@@ -357,10 +372,15 @@ class HTMLTemplates:
                     </tbody>
                 </table>
             </div>            
-            
-            <div class="footer">      
+            <div>
+              <p class="nav-links">
+                    <a href="/log" class="nav-link">Log</a> | <a href="/stats" class="nav-link">Stats</a> | <a href="/providers" class="nav-link">Providers</a>
+                </p>
+            </div>
+            <div class="footer">
                 <p>
-                Rows: {escaped_len_verified}
+                    Rows: {escaped_len_verified}
+                </p>
                 <p> <a href="https://bitrecs.ai" target="_blank" rel="noopener noreferrer">Bitrecs</a>
                 | <a href="https://dashboard.bitrecs.ai" target="_blank" rel="noopener noreferrer">Dashboard</a> | <a href="https://github.com/bitrecs/" target="_blank" rel="noopener noreferrer">Github</a>
                 </p>

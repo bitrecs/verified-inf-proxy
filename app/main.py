@@ -13,7 +13,8 @@ import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from app.d1 import D1Handler
-from app.html_templates import HTMLTemplates
+from app.html_log import HTMLLog
+from app.html_stats import HTMLStats
 from app.llm_providers import LLMProvider, LLMProviderStats
 from app.utils import is_valid_hotkey, load_version_info, verify_miner_request, verify_time
 from app.metagraph_sync_manager import MetagraphSyncManager
@@ -49,15 +50,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
+
 METAGRAPH_CACHE_DURATION = 900  # 15 minutes
-
-verified_display_cache = None
-verified_display_cache_timestamp = None
-VERIFIED_DISPLAY_CACHE_DURATION = 300
-
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
 IS_VERIFIED_HOUR_DELTA = 4  # Look back this many hours for recent verification
+MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=300)  # 5 minutes
+MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600)  # 10 minutes
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
+
+BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
+BT_NETUID = int(os.environ.get("BT_NETUID", 122))
+B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
+if not B64_PRIVATE_KEY:
+    raise ValueError("B64_PRIVATE_KEY environment variable not set")
+PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
+PUBLIC_KEY = PRIVATE_KEY.public_key()
+
+CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
+CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
+CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID", "")
+if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
+    raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
 
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
@@ -67,21 +81,6 @@ client = httpx.AsyncClient(
         keepalive_expiry=15.0
     )
 )
-
-BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
-BT_NETUID = int(os.environ.get("BT_NETUID", 122))
-B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
-if not B64_PRIVATE_KEY:
-    raise ValueError("B64_PRIVATE_KEY environment variable not set")
-PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
-PUBLIC_KEY = PRIVATE_KEY.public_key()
-MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
-
-CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
-CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
-CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID", "")
-if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
-    raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
 
 d1_client = D1Handler(
     account_id=CF_ACCOUNT_ID,
@@ -305,28 +304,46 @@ async def get_public_key(request: Request):
 
 @app.get("/log")
 @limiter.limit("60/minute")
-async def verified_log(request: Request):
-    global verified_display_cache, verified_display_cache_timestamp
+async def verified_log(request: Request):   
     request_ip = get_client_ip(request)
     ts = str(int(time.time()))    
     logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
-    current_time = time.time()
-    if (verified_display_cache is not None and
-        verified_display_cache_timestamp is not None and
-        (current_time - verified_display_cache_timestamp) < VERIFIED_DISPLAY_CACHE_DURATION):        
-        return HTMLResponse(content=verified_display_cache)    
-    # Fetch fresh data
-    verified = await d1_client.select_all_signed_responses(top=250)    
-    html_content = HTMLTemplates.render_verified_display(
-        verified=verified,
-        bt_network=BT_NETWORK,
-        bt_netuid=BT_NETUID
-    )
-    # Update cache
-    verified_display_cache = html_content
-    verified_display_cache_timestamp = current_time
-    logger.info("Updated verified_log cache")
-    return HTMLResponse(content=html_content)
+    cache_key = "verified_miner_log_html"
+    if cache_key in MINER_LOG_CACHE:
+        html_content = MINER_LOG_CACHE[cache_key]
+        return HTMLResponse(content=html_content)
+    else:
+        verified = await d1_client.select_all_signed_responses(top=250)
+        html_content = HTMLLog.render_verified_display(
+            verified=verified,
+            bt_network=BT_NETWORK,
+            bt_netuid=BT_NETUID
+        )
+        MINER_LOG_CACHE[cache_key] = html_content
+        logger.info("Updated verified_log cache")
+        return HTMLResponse(content=html_content)
+
+
+@app.get("/stats")
+@limiter.limit("60/minute")
+async def verified_stats(request: Request):    
+    request_ip = get_client_ip(request)
+    ts = str(int(time.time()))    
+    logger.info(f"verified_stats endpoint accessed from IP {request_ip} at {ts}")
+    cache_key = "verified_miner_stats_html"
+    if cache_key in MINER_STATS_CACHE:
+        html_content = MINER_STATS_CACHE[cache_key]
+        return HTMLResponse(content=html_content)
+    else:
+        verified = await d1_client.select_all_signed_responses(top=1000)
+        html_content = HTMLStats.render_verified_stats(
+            verified=verified,
+            bt_network=BT_NETWORK,
+            bt_netuid=BT_NETUID
+        )
+        MINER_STATS_CACHE[cache_key] = html_content
+        logger.info("Updated verified_stats cache")
+        return HTMLResponse(content=html_content)
 
 
 
