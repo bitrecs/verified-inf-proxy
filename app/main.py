@@ -53,7 +53,7 @@ METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 
 verified_display_cache = None
 verified_display_cache_timestamp = None
-VERIFIED_DISPLAY_CACHE_DURATION = 1800
+VERIFIED_DISPLAY_CACHE_DURATION = 300
 
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
 IS_VERIFIED_HOUR_DELTA = 4  # Look back this many hours for recent verification
@@ -68,14 +68,14 @@ client = httpx.AsyncClient(
     )
 )
 
-BT_NETWORK = os.environ.get("BT_NETWORK", "test")
-BT_NETUID = int(os.environ.get("BT_NETUID", 296))
+BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
+BT_NETUID = int(os.environ.get("BT_NETUID", 122))
 B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
 if not B64_PRIVATE_KEY:
     raise ValueError("B64_PRIVATE_KEY environment variable not set")
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
-MIN_ALPHA_STAKE = 1  # Minimum stake for alpha access
+MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
 
 CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
 CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
@@ -214,7 +214,7 @@ app_version = version_info if version_info else "0.8.8"
 app = FastAPI(
     title="Bitrecs Verified Inference (testnet)",
     version=app_version,
-    description="Proxy for verified inference with Bittensor integration, providing secure LLM completions.",
+    description="Proxy for verified inference with Bittensor integration, providing trusted LLM completions.",
     debug=False,
     lifespan=lifespan,
     # openapi_url="/api-docs.json"  # Optional: Change OpenAPI JSON path
@@ -411,42 +411,35 @@ async def forward_proxy_request(
     try:
         if not authorization or not authorization.startswith("Bearer "):
             logger.error(f"Request {request_id} missing or invalid Authorization header")
-            raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")
+            raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")        
         
-        if 1==1:
-            if not verify_time(int(x_timestamp)):
-                logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
-                raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
-        if 1==1:
-            payload_data = json.loads((await request.body()).decode('utf-8'))
-            verified = verify_miner_request(
-                hotkey=x_hotkey,
-                provider=x_provider,
-                nonce=x_nonce,
-                signature=x_signature,
-                payload=payload_data,
-                ts=x_timestamp
-            )
-            if not verified:
-                logger.error(f"\033[31mRequest {request_id} failed signature verification for hotkey {x_hotkey} \033[0m")
-                #raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
-            else:
-                logger.info(f"\033[32mRequest {request_id} passed signature verification for hotkey {x_hotkey} \033[0m")
+        if not verify_time(int(x_timestamp)):
+            logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
+            raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
+        
+        payload_data = json.loads((await request.body()).decode('utf-8'))
+        verified = verify_miner_request(
+            hotkey=x_hotkey,
+            provider=x_provider,
+            nonce=x_nonce,
+            signature=x_signature,
+            payload=payload_data,
+            ts=x_timestamp
+        )
+        if not verified:
+            logger.error(f"\033[31mRequest {request_id} failed signature verification for hotkey {x_hotkey} \033[0m")
+            raise HTTPException(401, "INVALID REQUEST: SIGNATURE VERIFICATION FAILED")
+        else:
+            logger.info(f"\033[32mRequest {request_id} passed signature verification for hotkey {x_hotkey} \033[0m")
         
         snapshot, _ = metagraph_manager.get_snapshot()
         if not snapshot:
             logger.error(f"Metagraph snapshot is empty for request {request_id}")
             raise HTTPException(503, "Service unavailable: Metagraph data not ready")
-
-        if 1==1:            
-            if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):
-                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
-                raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
-        if 1==2:
-            if not await check_request_ip(x_hotkey, client_ip):
-                logger.warning(f"\033[31mRequest IP {client_ip} does not match hotkey {x_hotkey}'s axon IP for request {request_id} \033[0m")
-                raise HTTPException(401, "INVALID REQUEST: IP MISMATCH")
-    
+        
+        if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
+            logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
+            raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
   
         provider = LLMProvider.from_str(x_provider)
         match provider:
@@ -469,6 +462,8 @@ async def forward_proxy_request(
                 url = "https://api.x.ai/v1/chat/completions"
             case LLMProvider.CLAUDE:
                 url = "https://api.anthropic.com/v1/chat/completions"
+            case LLMProvider.NVIDIA:
+                url = "https://integrate.api.nvidia.com/v1/chat/completions"
             case _:
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
@@ -515,11 +510,10 @@ async def forward_proxy_request(
         )
         et = time.perf_counter()
         duration = et - st
-
-        # Write to D1 in background thread
+        
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
-            app.state.thread_pool,  # Use the bounded pool
+            app.state.thread_pool,
             d1_client.insert_signed_response,
             signed_response,
             request_id,
@@ -572,7 +566,7 @@ async def verify_endpoint(
         return {
             "valid": True,
             "hotkey": response.proof.get("hotkey"),
-            "timestamp": response.timestamp,  # Use response.timestamp instead of response.proof.get("timestamp")
+            "timestamp": response.timestamp,
             "model": response.proof.get("model"),
             "provider": response.proof.get("provider"),
             "unique_id": response.proof.get("unique_id")

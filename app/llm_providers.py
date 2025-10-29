@@ -15,6 +15,7 @@ class LLMProvider(Enum):
     CHUTES = 8
     CEREBRAS = 9
     GROQ = 10
+    NVIDIA = 11
 
     @staticmethod
     def from_str(value: str) -> 'LLMProvider':
@@ -38,7 +39,9 @@ class LLMProvider(Enum):
             case "CEREBRAS":
                 return LLMProvider.CEREBRAS
             case "GROQ":
-                return LLMProvider.GROQ              
+                return LLMProvider.GROQ
+            case "NVIDIA":
+                return LLMProvider.NVIDIA        
             case _:
                 raise ValueError("Unknown LLMPRovider server")
         
@@ -87,36 +90,66 @@ class LLMProviderStats:
                 return "api.cerebras.ai"
             case LLMProvider.GROQ:
                 return "api.groq.com"
+            case LLMProvider.NVIDIA:
+                return "integrate.api.nvidia.com"
             case _:
                 raise ValueError("Unknown LLMProvider server")  
             
     @staticmethod
+    def provider_port(provider: LLMProvider) -> int:
+        match provider:
+            case LLMProvider.OLLAMA_LOCAL:
+                return 80  # Assuming local HTTP
+            case LLMProvider.CHAT_GPT:
+                return 443  # HTTPS
+            case LLMProvider.OPEN_ROUTER:
+                return 443
+            case LLMProvider.VLLM:
+                return 80
+            case LLMProvider.GEMINI:
+                return 443
+            case LLMProvider.GROK:
+                return 443
+            case LLMProvider.CLAUDE:
+                return 443
+            case LLMProvider.CHUTES:
+                return 443
+            case LLMProvider.CEREBRAS:
+                return 443
+            case LLMProvider.GROQ:
+                return 443
+            case LLMProvider.NVIDIA:
+                return 443  # Fix for NVIDIA
+            case _:
+                return 80  # Default fallback
+
+    @staticmethod
     def ping_provider(provider: LLMProvider) -> str:
-        """Pings, traceroutes, and retrieves domain info for the given LLMProvider, returning the report as a string."""
         domain = LLMProviderStats.provider_domain(provider)
         if not domain:
             return f"No domain to ping for provider {provider} (likely local)."
         
-        # Gather domain info
         try:
             ip_address = socket.gethostbyname(domain)
         except socket.gaierror:
             ip_address = "DNS resolution failed"
         
-        print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address})")        
+        port = LLMProviderStats.provider_port(provider)  # Get the correct port
+        
+        print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address}, Port: {port})")
         
         avg_ping_time = "N/A"
         ping_status = "Failure"
-        try:            
-            ping_result, latency = LLMProviderStats.tcp_ping(ip_address)
+        try:
+            ping_result, latency = LLMProviderStats.tcp_ping(ip_address, port=port)  # Pass the port
             if ping_result:
-                ping_status = "Success"                
-                f = float(latency)              
-                avg_ping_time = f"{f:.2f} ms"  # Average round-trip time
+                ping_status = "Success"
+                f = float(latency)
+                avg_ping_time = f"{f:.2f} ms"
             else:
-                ping_status = "Failure (No response)"        
+                ping_status = "Failure (No response)"
         except Exception as e:
-            ping_status = f"Failure ({str(e)})"       
+            ping_status = f"Failure ({str(e)})"
        
         
         # Prepare table data as list of tuples (metric, details)
@@ -158,14 +191,16 @@ class LLMProviderStats:
             ip_address = socket.gethostbyname(domain)
         except socket.gaierror:
             ip_address = "DNS resolution failed"
-        
-        print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address})")
+    
+        port = LLMProviderStats.provider_port(provider)  # Get the correct port
+    
+        print(f"Pinging provider {provider} at domain {domain} (IP: {ip_address}, Port: {port})")
         
         # Perform ping using TCP
         avg_ping_time = "N/A"
         ping_status = "Failure"
         try:            
-            ping_result, latency = LLMProviderStats.tcp_ping(ip_address)
+            ping_result, latency = LLMProviderStats.tcp_ping(ip_address, port=port)  # Pass the port
             if ping_result:
                 ping_status = "Success"  
                 f = float(latency)              
@@ -174,12 +209,13 @@ class LLMProviderStats:
                 ping_status = "Failure (No response)"        
         except Exception as e:
             ping_status = f"Failure ({str(e)})"       
-        
+    
         # Prepare table data
         table_data = [
             ("Provider", str(provider)),
             ("Domain", domain),
             ("IP Address", ip_address),
+            ("Port", str(port)),  # Added port to table for visibility
             ("Ping Status", ping_status),
             ("Average Ping Time", avg_ping_time),
         ]

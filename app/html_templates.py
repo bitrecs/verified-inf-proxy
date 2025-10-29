@@ -1,5 +1,7 @@
+import html
 import json
 from typing import List, Dict, Any
+
 
 class HTMLTemplates:
     @staticmethod
@@ -16,7 +18,7 @@ class HTMLTemplates:
             
             # Parse response_json to extract content
             response_content = 'N/A'
-            miner_url = f"https://dashboard.bitrecs.ai/miner?uid={hotkey}"
+            miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
             
             try:
                 response_data = json.loads(item.get('response_json', '{}'))
@@ -36,17 +38,31 @@ class HTMLTemplates:
             except:
                 pass
 
+            # Escape all dynamic content for HTML safety
+            escaped_timestamp = html.escape(str(timestamp))
+            escaped_hotkey = html.escape(str(hotkey))
+            escaped_model = html.escape(str(model))
+            escaped_provider = html.escape(str(provider))
+            escaped_response_content = html.escape(str(response_content))
+            escaped_duration = html.escape(str(duration))
+            escaped_signature = html.escape(str(signature))
+
             rows_html += f"""
                         <tr>
-                            <td data-label="Timestamp" class="timestamp">{timestamp}</td>
-                            <td data-label="Hotkey" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{hotkey}</a></td>
-                            <td data-label="Model" class="model">{model}</td>
-                            <td data-label="Model" class="model">{provider}</td>
-                            <td data-label="Response" class="response">{response_content}</td>
-                            <td data-label="Duration" class="duration">{duration}s</td>
-                            <td data-label="Signature" class="signature">{signature}</td>
+                            <td data-label="{html.escape('Timestamp')}" class="timestamp">{escaped_timestamp}</td>
+                            <td data-label="{html.escape('Hotkey')}" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{escaped_hotkey}</a></td>
+                            <td data-label="{html.escape('Model')}" class="model">{escaped_model}</td>
+                            <td data-label="{html.escape('Provider')}" class="model">{escaped_provider}</td>
+                            <td data-label="{html.escape('Response')}" class="response">{escaped_response_content}</td>
+                            <td data-label="{html.escape('Duration')}" class="duration">{escaped_duration}s</td>
+                            <td data-label="{html.escape('Signature')}" class="signature">{escaped_signature}</td>
                         </tr>
             """
+
+        # Escape header data as well
+        escaped_bt_network = html.escape(str(bt_network))
+        escaped_bt_netuid = html.escape(str(bt_netuid))
+        escaped_len_verified = html.escape(str(len(verified)))
 
         return f"""
     <!DOCTYPE html>
@@ -307,15 +323,15 @@ class HTMLTemplates:
                 <div class="stats">                   
                     <div class="stat-item">
                         <span class="stat-label">Network:</span>
-                        <span class="{bt_network}">{bt_network}</span>
+                        <span class="{escaped_bt_network}">{escaped_bt_network}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Netuid:</span>
-                        <span>{bt_netuid}</span>
+                        <span>{escaped_bt_netuid}</span>
                     </div>
                      <div class="stat-item">
                         <span class="stat-label">Samples:</span>
-                        <span>{len(verified)}</span>
+                        <span>{escaped_len_verified}</span>
                     </div>
                 </div>
             </div>

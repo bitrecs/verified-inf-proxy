@@ -1,16 +1,23 @@
-import base64
-import hashlib
-import secrets
-import time
 import httpx
 import json
-from typing import Any, Dict, Tuple
+import base64
+import time
+import hashlib
+import secrets
+import traceback
+from typing import Tuple
 from dotenv import load_dotenv
+from datetime import datetime, timezone
+from app.models import SignedResponse
 load_dotenv()
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fiber import (
     Keypair
 )
+from cryptography.exceptions import InvalidSignature
+
+
+PERMITTED_CLOCK_DIFF_SECONDS = 300  # 5 minutes
 
 
 async def call_proxy_server_with_signing(
@@ -20,7 +27,7 @@ async def call_proxy_server_with_signing(
     keypair: Keypair,
     provider: str, 
     auth_key: str
-) -> Dict[str, Any]:
+) -> SignedResponse:
     """Call the proxy server with a request."""
     headers = {
         "Authorization": f"Bearer {auth_key}",
@@ -42,32 +49,47 @@ async def call_proxy_server_with_signing(
         print(f"Response status code: {response.status_code}")
         print(f"Response content: {response.text}")
         response.raise_for_status()
-        return response.json()
+        thing = response.json()
+        result = SignedResponse(**thing)
+        return result        
 
 
-def verify_signature(
-    response: Dict[str, Any], 
+
+def verify_proof(
+    response: SignedResponse, 
     public_key: Ed25519PublicKey
 ) -> bool:
-    """Verify the signature of the response."""
-    proof = response["proof"]
-    signature_b64 = response["signature"]
-    timestamp = response["timestamp"]
-    ttl = response["ttl"]
-    signed_data = {
-        "proof": proof,
-        "timestamp": timestamp,
-        "ttl": ttl
-    }
-    serialized_data = json.dumps(signed_data, sort_keys=True).encode()
-    print(f"Proof: {proof}")
-    print(f"Signature (base64): {signature_b64}")
-    signature_bytes = base64.b64decode(signature_b64)    
+    proof = response.proof
+    signature_b64 = response.signature
+    timestamp = response.timestamp
+    ttl = response.ttl
     try:
+        current_time = datetime.now(timezone.utc)
+        proof_time = datetime.fromisoformat(timestamp)
+        ttl_time = datetime.fromisoformat(ttl)
+        time_diff = abs((current_time - proof_time).total_seconds())
+        if time_diff > PERMITTED_CLOCK_DIFF_SECONDS:            
+            print(f"Timestamp too old or future: {time_diff} seconds")
+            return False
+        if current_time > ttl_time:            
+            print(f"Proof expired: TTL {ttl_time}, current {current_time}")
+            return False
+        signed_data = {
+            "proof": proof,
+            "timestamp": timestamp,
+            "ttl": ttl
+        }
+        serialized_data = json.dumps(signed_data, sort_keys=True).encode()
+        signature_bytes = base64.b64decode(signature_b64)
         public_key.verify(signature_bytes, serialized_data)
         return True
-    except Exception as e:
-        print(f"Verification failed: {e}")
+    except InvalidSignature:        
+        print("verify_proof Verification failed: Invalid signature")
+        return False
+    except Exception as e:        
+        traceback_str = traceback.format_exc()
+        print(f"verify_proof Verification failed: {type(e).__name__}: {str(e) or 'No message'}")
+        print(f"Traceback:\n{traceback_str}")        
         return False
 
 
