@@ -462,6 +462,8 @@ async def forward_proxy_request(
                 url = "https://api.x.ai/v1/chat/completions"
             case LLMProvider.CLAUDE:
                 url = "https://api.anthropic.com/v1/chat/completions"
+            case LLMProvider.NVIDIA:
+                url = "https://integrate.api.nvidia.com/v1/chat/completions"
             case _:
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
