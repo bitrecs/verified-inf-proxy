@@ -243,9 +243,8 @@ class HTMLStats:
             .footer a:hover {{
                 text-decoration: underline;
             }}
-
             .nav-links {{
-                margin: 10px 0;
+                margin: 20px 0;  
                 text-align: center;
                 font-size: 14px;
                 color: #8b949e;
@@ -337,7 +336,10 @@ class HTMLStats:
                     font-size: 12px;
                     padding: 10px;
                 }}
-              
+                
+                .nav-links {{
+                    margin: 15px 0;
+                }}
             }}
         </style>
     </head>
@@ -363,7 +365,11 @@ class HTMLStats:
                     </div>
                 </div>
             </div>
-            
+            <div>
+              <p class="nav-links">
+                    <a href="/log" class="nav-link">Log</a> | <a href="/stats" class="nav-link">Stats</a> | <a href="/providers" class="nav-link">Providers</a>
+                </p>
+            </div>
             <div class="table-container">
                 <table>
                     <thead>

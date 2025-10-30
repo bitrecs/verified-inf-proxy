@@ -59,6 +59,8 @@ MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=300)  # 5 minutes
 MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600)  # 10 minutes
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
 
+REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
+
 BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
 BT_NETUID = int(os.environ.get("BT_NETUID", 122))
 B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
@@ -457,6 +459,17 @@ async def forward_proxy_request(
         if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
             logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
             raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
+        
+        #check for miner dupe hash
+        if 1==1:
+            miner_request_key = f"{x_hotkey}:{hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()}"
+            if miner_request_key in REQUEST_HASH_HISTORY:
+                #logger.warning(f"\033[33mDuplicate request detected for request {request_id} with hash {miner_request_key}\033[0m")
+                logger.error(f"\033[31mRequest {request_id} is a duplicate and will be rejected.\033[0m")
+                #raise HTTPException(400, "Duplicate request detected")
+            else:
+                REQUEST_HASH_HISTORY[miner_request_key] = True
+
   
         provider = LLMProvider.from_str(x_provider)
         match provider:
@@ -500,9 +513,11 @@ async def forward_proxy_request(
             logger.error(f"Response content: {response.text}")
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
+        request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
+        response_hash = hashlib.sha256(response.content).hexdigest()
         proof = {
-            "request_hash": hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest(),
-            "response_hash": hashlib.sha256(response.content).hexdigest(),
+            "request_hash": request_hash,
+            "response_hash": response_hash,
             "hotkey": x_hotkey,
             "model": completion_request.model,
             "provider": str(provider),
