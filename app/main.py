@@ -13,7 +13,8 @@ import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from app.d1 import D1Handler
-from app.html_templates import HTMLTemplates
+from app.html_log import HTMLLog
+from app.html_stats import HTMLStats
 from app.llm_providers import LLMProvider, LLMProviderStats
 from app.utils import is_valid_hotkey, load_version_info, verify_miner_request, verify_time
 from app.metagraph_sync_manager import MetagraphSyncManager
@@ -49,15 +50,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
+
 METAGRAPH_CACHE_DURATION = 900  # 15 minutes
-
-verified_display_cache = None
-verified_display_cache_timestamp = None
-VERIFIED_DISPLAY_CACHE_DURATION = 300
-
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
 IS_VERIFIED_HOUR_DELTA = 4  # Look back this many hours for recent verification
+MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=300)  # 5 minutes
+MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600)  # 10 minutes
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
+
+REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
+NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
+
+BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
+BT_NETUID = int(os.environ.get("BT_NETUID", 122))
+B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
+if not B64_PRIVATE_KEY:
+    raise ValueError("B64_PRIVATE_KEY environment variable not set")
+PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
+PUBLIC_KEY = PRIVATE_KEY.public_key()
+
+CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
+CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
+CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID", "")
+if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
+    raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
 
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
@@ -67,21 +84,6 @@ client = httpx.AsyncClient(
         keepalive_expiry=15.0
     )
 )
-
-BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
-BT_NETUID = int(os.environ.get("BT_NETUID", 122))
-B64_PRIVATE_KEY = os.environ.get("B64_PRIVATE_KEY")
-if not B64_PRIVATE_KEY:
-    raise ValueError("B64_PRIVATE_KEY environment variable not set")
-PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
-PUBLIC_KEY = PRIVATE_KEY.public_key()
-MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
-
-CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
-CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
-CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID", "")
-if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
-    raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
 
 d1_client = D1Handler(
     account_id=CF_ACCOUNT_ID,
@@ -305,29 +307,46 @@ async def get_public_key(request: Request):
 
 @app.get("/log")
 @limiter.limit("60/minute")
-async def verified_log(request: Request):
-    global verified_display_cache, verified_display_cache_timestamp
+async def verified_log(request: Request):   
     request_ip = get_client_ip(request)
     ts = str(int(time.time()))    
     logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
-    current_time = time.time()
-    if (verified_display_cache is not None and
-        verified_display_cache_timestamp is not None and
-        (current_time - verified_display_cache_timestamp) < VERIFIED_DISPLAY_CACHE_DURATION):        
-        return HTMLResponse(content=verified_display_cache)    
-    # Fetch fresh data
-    verified = await d1_client.select_all_signed_responses(top=250)    
-    html_content = HTMLTemplates.render_verified_display(
-        verified=verified,
-        bt_network=BT_NETWORK,
-        bt_netuid=BT_NETUID
-    )
-    # Update cache
-    verified_display_cache = html_content
-    verified_display_cache_timestamp = current_time
-    logger.info("Updated verified_log cache")
-    return HTMLResponse(content=html_content)
+    cache_key = "verified_miner_log_html"
+    if cache_key in MINER_LOG_CACHE:
+        html_content = MINER_LOG_CACHE[cache_key]
+        return HTMLResponse(content=html_content)
+    else:
+        verified = await d1_client.select_all_signed_responses(top=250)
+        html_content = HTMLLog.render_verified_display(
+            verified=verified,
+            bt_network=BT_NETWORK,
+            bt_netuid=BT_NETUID
+        )
+        MINER_LOG_CACHE[cache_key] = html_content
+        logger.info("Updated verified_log cache")
+        return HTMLResponse(content=html_content)
 
+
+@app.get("/stats")
+@limiter.limit("60/minute")
+async def verified_stats(request: Request):    
+    request_ip = get_client_ip(request)
+    ts = str(int(time.time()))    
+    logger.info(f"verified_stats endpoint accessed from IP {request_ip} at {ts}")
+    cache_key = "verified_miner_stats_html"
+    if cache_key in MINER_STATS_CACHE:
+        html_content = MINER_STATS_CACHE[cache_key]
+        return HTMLResponse(content=html_content)
+    else:
+        verified = await d1_client.select_all_signed_responses(top=1000)
+        html_content = HTMLStats.render_verified_stats(
+            verified=verified,
+            bt_network=BT_NETWORK,
+            bt_netuid=BT_NETUID
+        )
+        MINER_STATS_CACHE[cache_key] = html_content
+        logger.info("Updated verified_stats cache")
+        return HTMLResponse(content=html_content)
 
 
 @app.get("/providers")
@@ -361,9 +380,11 @@ async def is_verified(request: Request, hotkey: str):
         return JSONResponse(status_code=200, content=cached_result)
     
     since_date = datetime.now(timezone.utc) - timedelta(hours=IS_VERIFIED_HOUR_DELTA)
-    latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=1)
-    if not latest:
-        result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}
+    latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=10)
+    if not latest or len(latest) == 0:
+        result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}    
+    elif len(latest) < 5:
+        result = {"verified": False, "hotkey": hotkey, "message": "Not enough verified responses found"}
     else:
         latest_response = latest[0]
         timestamp_str = latest_response.get("timestamp")
@@ -382,7 +403,8 @@ async def is_verified(request: Request, hotkey: str):
                 if age_seconds > IS_VERIFIED_HOUR_DELTA * 3600:
                     result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {IS_VERIFIED_HOUR_DELTA} hours"}
                 else:
-                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has a recent verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
+                    total_responses = len(latest)
+                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has {total_responses} verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
     
     IS_VERIFIED_CACHE[hotkey] = result
     logger.info(f"\033[32mCached result for hotkey {hotkey}: {result['verified']}\033[0m")
@@ -440,6 +462,24 @@ async def forward_proxy_request(
         if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
             logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
             raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
+        
+        #check for miner dupe hash
+        if 1==1:
+            miner_request_key = f"{x_hotkey}:{hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()}"
+            if miner_request_key in REQUEST_HASH_HISTORY:
+                #logger.warning(f"\033[33mDuplicate request detected for request {request_id} with hash {miner_request_key}\033[0m")
+                logger.error(f"\033[31mRequest {request_id} is a duplicate and will be rejected.\033[0m")
+                #raise HTTPException(400, "Duplicate request detected")
+            else:
+                REQUEST_HASH_HISTORY[miner_request_key] = True
+
+        if 1==1:
+            if x_nonce in NONCE_HISTORY:
+                logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
+                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
+            else:
+                NONCE_HISTORY[x_nonce] = True
+
   
         provider = LLMProvider.from_str(x_provider)
         match provider:
@@ -483,9 +523,11 @@ async def forward_proxy_request(
             logger.error(f"Response content: {response.text}")
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
+        request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
+        response_hash = hashlib.sha256(response.content).hexdigest()
         proof = {
-            "request_hash": hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest(),
-            "response_hash": hashlib.sha256(response.content).hexdigest(),
+            "request_hash": request_hash,
+            "response_hash": response_hash,
             "hotkey": x_hotkey,
             "model": completion_request.model,
             "provider": str(provider),
