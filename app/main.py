@@ -214,7 +214,7 @@ version_info = load_version_info()
 app_version = version_info if version_info else "0.8.8"
 
 app = FastAPI(
-    title="Bitrecs Verified Inference",
+    title=f"Bitrecs Verified Inference (Netuid: {BT_NETWORK} - Network: {BT_NETUID})",
     version=app_version,
     description="Proxy for verified inference with Bittensor integration, providing trusted LLM completions.",
     debug=False,
@@ -562,6 +562,14 @@ async def forward_proxy_request(
             duration,
             str(provider)
         )
+
+        loop.run_in_executor(
+            app.state.thread_pool,
+            d1_client.insert_used_nonce,
+            x_nonce,
+            x_hotkey
+        )
+
         app.state.total_requests += 1
         logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")
         return signed_response

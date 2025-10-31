@@ -1,7 +1,7 @@
-import datetime
 import json
 import logging
 import requests
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 from dotenv import load_dotenv
 load_dotenv()
@@ -131,4 +131,30 @@ class D1Handler:
         except Exception as e:
             print(f"Error inserting SignedResponse: {e}")
             logger.error(f"Error inserting SignedResponse: {e}")
-            return False   
+            return False
+        
+        
+    def insert_used_nonce(self, nonce: str, hotkey: str) -> bool:
+        """Insert a used nonce into D1 to prevent replay attacks."""
+        try:
+            url = f"{self.base_url}/query"
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json"
+            }
+            sql = "INSERT INTO used_nonces (nonce, hotkey, timestamp) VALUES (?, ?, ?)"
+            timestamp = datetime.now(timezone.utc).isoformat()
+            params = [nonce, hotkey, timestamp]
+            payload = {
+                "sql": sql,
+                "params": params
+            }
+            resp = requests.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+            is_success = result.get('success', False)  # Checks top-level 'success'
+            return is_success
+        except Exception as e:
+            print(f"Error inserting used nonce: {e}")
+            logger.error(f"Error inserting used nonce: {e}")
+            return False
