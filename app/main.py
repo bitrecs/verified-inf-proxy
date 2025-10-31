@@ -473,12 +473,18 @@ async def forward_proxy_request(
             else:
                 REQUEST_HASH_HISTORY[miner_request_key] = True
 
-        if 1==1:
+        if 1==2:
             if x_nonce in NONCE_HISTORY:
                 logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
                 raise HTTPException(400, "Replay attack detected: Nonce has already been used")
             else:
                 NONCE_HISTORY[x_nonce] = True
+                
+        if 1==2:
+            nonce_exists = d1_client.check_nonce_used(x_nonce)
+            if nonce_exists:
+                logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
+                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
 
   
         provider = LLMProvider.from_str(x_provider)

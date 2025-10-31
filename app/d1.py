@@ -158,3 +158,32 @@ class D1Handler:
             print(f"Error inserting used nonce: {e}")
             logger.error(f"Error inserting used nonce: {e}")
             return False
+        
+        
+    def check_nonce_used(self, nonce: str) -> bool:
+        """Check if a nonce has already been used for a given hotkey."""
+        try:
+            url = f"{self.base_url}/query"
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json"
+            }
+            sql = "SELECT COUNT(*) as count FROM used_nonces WHERE nonce = ? "
+            params = [nonce]
+            payload = {
+                "sql": sql,
+                "params": params
+            }
+            resp = requests.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get('success'):
+                count = result['result'][0]['results'][0]['count']
+                return count > 0
+            else:
+                logger.error(f"Failed to check nonce usage: {result}")
+                return False
+        except Exception as e:
+            print(f"Error checking nonce usage: {e}")
+            logger.error(f"Error checking nonce usage: {e}")
+            return False
