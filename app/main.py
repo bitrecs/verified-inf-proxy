@@ -214,7 +214,7 @@ version_info = load_version_info()
 app_version = version_info if version_info else "0.8.8"
 
 app = FastAPI(
-    title="Bitrecs Verified Inference (testnet)",
+    title=f"Bitrecs Verified Inference (Netuid: {BT_NETWORK} - Network: {BT_NETUID})",
     version=app_version,
     description="Proxy for verified inference with Bittensor integration, providing trusted LLM completions.",
     debug=False,
