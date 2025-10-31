@@ -60,6 +60,7 @@ MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600)  # 10 minutes
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
+NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
 BT_NETUID = int(os.environ.get("BT_NETUID", 122))
@@ -469,6 +470,13 @@ async def forward_proxy_request(
                 #raise HTTPException(400, "Duplicate request detected")
             else:
                 REQUEST_HASH_HISTORY[miner_request_key] = True
+
+        if 1==1:
+            if x_nonce in NONCE_HISTORY:
+                logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
+                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
+            else:
+                NONCE_HISTORY[x_nonce] = True
 
   
         provider = LLMProvider.from_str(x_provider)
