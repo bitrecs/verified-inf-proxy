@@ -268,14 +268,14 @@ class LLMProviderStats:
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>All Providers Ping Reports</title>
+            <title>Bitrecs Verified Providers</title>
             <style>
                 body {{
                     font-family: 'Courier New', monospace;
                     background-color: #f4f4f4;
                     color: #333;
-                    margin: 20px;
-                    padding: 20px;
+                    margin: 10px;
+                    padding: 10px;
                     text-align: center;
                 }}
                 h1 {{
@@ -286,7 +286,7 @@ class LLMProviderStats:
                     margin-top: 40px;
                 }}
                 table {{
-                    width: 80%;
+                    width: 95%;
                     margin: 20px auto;
                     border-collapse: collapse;
                     background-color: #fff;
@@ -311,7 +311,7 @@ class LLMProviderStats:
             </style>
         </head>
         <body>
-            <h1>All Providers Ping Reports</h1>
+            <h1>Bitrecs Verified Providers</h1>
             {all_snippets_html}
         </body>
         </html>
