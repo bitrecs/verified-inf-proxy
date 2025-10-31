@@ -349,7 +349,6 @@ async def verified_stats(request: Request):
         return HTMLResponse(content=html_content)
 
 
-
 @app.get("/providers")
 @limiter.limit("60/minute")
 async def provider_log(request: Request):
@@ -381,9 +380,11 @@ async def is_verified(request: Request, hotkey: str):
         return JSONResponse(status_code=200, content=cached_result)
     
     since_date = datetime.now(timezone.utc) - timedelta(hours=IS_VERIFIED_HOUR_DELTA)
-    latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=1)
-    if not latest:
-        result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}
+    latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=10)
+    if not latest or len(latest) == 0:
+        result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}    
+    elif len(latest) < 5:
+        result = {"verified": False, "hotkey": hotkey, "message": "Not enough verified responses found"}
     else:
         latest_response = latest[0]
         timestamp_str = latest_response.get("timestamp")
@@ -402,7 +403,8 @@ async def is_verified(request: Request, hotkey: str):
                 if age_seconds > IS_VERIFIED_HOUR_DELTA * 3600:
                     result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {IS_VERIFIED_HOUR_DELTA} hours"}
                 else:
-                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has a recent verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
+                    total_responses = len(latest)
+                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has {total_responses} verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
     
     IS_VERIFIED_CACHE[hotkey] = result
     logger.info(f"\033[32mCached result for hotkey {hotkey}: {result['verified']}\033[0m")
