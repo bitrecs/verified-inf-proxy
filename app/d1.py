@@ -1,8 +1,7 @@
-import datetime
 import json
 import logging
-from time import timezone
 import requests
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 from dotenv import load_dotenv
 load_dotenv()
