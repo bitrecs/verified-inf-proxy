@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 from dotenv import load_dotenv
 load_dotenv()
-from app.models import SignedResponse
+from app.models import ChatCompletionRequest, SignedResponse
 logger = logging.getLogger(__name__)
 
 
@@ -132,6 +132,46 @@ class D1Handler:
             print(f"Error inserting SignedResponse: {e}")
             logger.error(f"Error inserting SignedResponse: {e}")
             return False
+        
+    def insert_completion_request(self, unique_id: str, hotkey: str, provider: str, cr: ChatCompletionRequest) -> bool:
+        """Insert a completion request into D1 for logging purposes."""
+        try:
+            url = f"{self.base_url}/query"
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json"
+            }
+            sql = """
+            INSERT INTO completion_requests (unique_id, hotkey, provider, model, messages_json, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """
+            request_json = json.dumps(cr.model_dump(), sort_keys=True, default=str)
+            timestamp = datetime.now(timezone.utc).isoformat()
+            params = [
+                unique_id,
+                hotkey,
+                provider,
+                str(cr.model),
+                request_json,
+                timestamp
+            ]
+            payload = {
+                "sql": sql,
+                "params": params
+            }
+            resp = requests.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+            is_success = result.get('success', False)  # Checks top-level 'success'
+            return is_success
+        except Exception as e:
+            print(f"Error inserting completion request: {e}")
+            logger.error(f"Error inserting completion request: {e}")
+            return False        
+            
+
+           
+        
         
         
     def insert_used_nonce(self, nonce: str, hotkey: str) -> bool:

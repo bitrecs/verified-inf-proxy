@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server starting up")
     tracemalloc.start()    
     app.state.thread_pool = ThreadPoolExecutor(
-        max_workers=2,
+        max_workers=4,
         thread_name_prefix="D1-Writer"
     )    
     app.state.last_updated = None
@@ -574,6 +574,15 @@ async def forward_proxy_request(
             d1_client.insert_used_nonce,
             x_nonce,
             x_hotkey
+        )
+
+        loop.run_in_executor(
+            app.state.thread_pool,
+            d1_client.insert_completion_request,
+            request_id,
+            x_hotkey,            
+            str(provider),
+            completion_request
         )
 
         app.state.total_requests += 1
