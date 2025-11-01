@@ -3,6 +3,7 @@ import gc
 import time
 import json
 import uuid
+import secrets
 import hashlib
 import base64
 import httpx
@@ -152,6 +153,34 @@ async def refresh_provider_pings():
         except Exception as e:
             logger.error(f"Error refreshing provider pings: {e}")
         await asyncio.sleep(1800)  # Refresh every 30 minutes
+
+
+def save_request_data(
+    signed_response: SignedResponse,
+    request_id: str,
+    duration: float,
+    provider: str,
+    x_nonce: str,
+    x_hotkey: str,
+    completion_request: ChatCompletionRequest
+):
+    """Background function to insert all request-related data into D1."""
+    try:
+        # Insert signed response
+        d1_client.insert_signed_response(signed_response, request_id, duration, provider)
+        logger.debug(f"Inserted signed response for request {request_id}")
+        
+        # Insert used nonce
+        d1_client.insert_used_nonce(x_nonce, x_hotkey)
+        logger.debug(f"Inserted used nonce for request {request_id}")
+        
+        # Insert completion request
+        d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
+        logger.debug(f"Inserted completion request for request {request_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
+        app.state.exceptions += 1
 
 
 
@@ -531,6 +560,7 @@ async def forward_proxy_request(
         
         request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
         response_hash = hashlib.sha256(response.content).hexdigest()
+        nonce = secrets.token_bytes(16)
         proof = {
             "request_hash": request_hash,
             "response_hash": response_hash,
@@ -558,30 +588,17 @@ async def forward_proxy_request(
         )
         et = time.perf_counter()
         duration = et - st
-        
+
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
             app.state.thread_pool,
-            d1_client.insert_signed_response,
+            save_request_data,
             signed_response,
             request_id,
             duration,
-            str(provider)
-        )
-
-        loop.run_in_executor(
-            app.state.thread_pool,
-            d1_client.insert_used_nonce,
-            x_nonce,
-            x_hotkey
-        )
-
-        loop.run_in_executor(
-            app.state.thread_pool,
-            d1_client.insert_completion_request,
-            request_id,
-            x_hotkey,            
             str(provider),
+            x_nonce,
+            x_hotkey,
             completion_request
         )
 
@@ -642,3 +659,5 @@ async def verify_endpoint(
             "valid": False,
             "error": "Invalid signature"
         }
+    
+
