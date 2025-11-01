@@ -169,3 +169,21 @@ def test_d1_insert_signed_response_using_helper():
     result = d1_handler.insert_signed_response(SignedResponse_example, request_id="test_request_id_123")
     print("D1 Insert via Helper Result:", result)
     assert True is result
+
+
+def test_used_nonce_denied():
+    d1_handler = D1Handler(
+        account_id=CF_ACCOUNT_ID,
+        token=CF_D1_TOKEN,
+        database_id=CF_D1_DATABASE_ID
+    )
+    nonce = secrets.token_hex(16)
+    hotkey = f"test_hotkey_nonce_{nonce}"
+    
+    first_insert = d1_handler.insert_used_nonce(nonce, hotkey)
+    print("First nonce insert result:", first_insert)
+    assert first_insert is True
+
+    exists = d1_handler.check_nonce_used(nonce)
+    print("Nonce exists after first insert:", exists)
+    assert exists is True
