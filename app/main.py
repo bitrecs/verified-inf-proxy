@@ -165,12 +165,12 @@ def save_request_data(
     x_nonce: str,
     x_hotkey: str,
     completion_request: ChatCompletionRequest
-):
+) -> bool:
     """Background function to insert all request-related data into D1."""
     try:
         # Insert signed response
-        d1_client.insert_signed_response(signed_response, request_id, duration, provider)
-        logger.debug(f"Inserted signed response for request {request_id}")
+        #d1_client.insert_signed_response(signed_response, request_id, duration, provider)
+        #logger.debug(f"Inserted signed response for request {request_id}")
         
         # Insert used nonce
         # d1_client.insert_used_nonce(x_nonce, x_hotkey)
@@ -179,6 +179,20 @@ def save_request_data(
         # # Insert completion request
         # d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
         # logger.debug(f"Inserted completion request for request {request_id}")
+        # unique_id: str,  response: SignedResponse, duration: float = 0, provider: str = "", x_nonce: str = "", x_hotkey: str = "", completion_request: ChatCompletionRequest = None
+
+        pg_handler = PGHandler(os.environ.get("POSTGRESS_DB_URL", ""))
+        result = pg_handler.insert_signed_response(
+            unique_id=request_id,
+            response=signed_response,
+            duration=duration,
+            provider=provider,
+            x_nonce=x_nonce,
+            x_hotkey=x_hotkey,
+            completion_request=completion_request
+        )
+        return result
+
         
     except Exception as e:
         logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
@@ -384,30 +398,56 @@ async def verified_log(request: Request):
         logger.info("Updated verified_log cache")
         return HTMLResponse(content=html_content)
 
-
-@app.get("/stats")
+@app.get("/logpg")
 @limiter.limit("60/minute")
-async def verified_stats(request: Request):    
+async def verified_logpg(request: Request):   
     request_ip = get_client_ip(request)
     ts = str(int(time.time()))    
-    logger.info(f"verified_stats endpoint accessed from IP {request_ip} at {ts}")
-    cache_key = "verified_miner_stats_html"
-    if cache_key in MINER_STATS_CACHE:
-        html_content = MINER_STATS_CACHE[cache_key]
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
+    cache_key = "verified_miner_log_html"
+    if cache_key in MINER_LOG_CACHE:
+        html_content = MINER_LOG_CACHE[cache_key]
         return HTMLResponse(content=html_content)
     else:
-        verified = await d1_client.select_all_signed_responses(top=1000)
-        html_content = HTMLStats.render_verified_stats(
+        TEST_DB_URL = os.environ.get("POSTGRESS_DB_URL", "")
+        if not TEST_DB_URL:
+            return HTMLResponse(content="<pre>no db</pre>")
+        handler = PGHandler(TEST_DB_URL)
+        verified = handler.select_signed_responses(limit=250)
+        html_content = HTMLLog.render_verified_display(
             verified=verified,
             bt_network=BT_NETWORK,
             bt_netuid=BT_NETUID
         )
-        MINER_STATS_CACHE[cache_key] = html_content
-        logger.info("Updated verified_stats cache")
+        MINER_LOG_CACHE[cache_key] = html_content
+        logger.info("Updated verified_log cache from pg")
         return HTMLResponse(content=html_content)
+       
+
+
+# @app.get("/stats")
+# @limiter.limit("60/minute")
+# async def verified_stats(request: Request):    
+#     request_ip = get_client_ip(request)
+#     ts = str(int(time.time()))    
+#     logger.info(f"verified_stats endpoint accessed from IP {request_ip} at {ts}")
+#     cache_key = "verified_miner_stats_html"
+#     if cache_key in MINER_STATS_CACHE:
+#         html_content = MINER_STATS_CACHE[cache_key]
+#         return HTMLResponse(content=html_content)
+#     else:
+#         verified = await d1_client.select_all_signed_responses(top=1000)
+#         html_content = HTMLStats.render_verified_stats(
+#             verified=verified,
+#             bt_network=BT_NETWORK,
+#             bt_netuid=BT_NETUID
+#         )
+#         MINER_STATS_CACHE[cache_key] = html_content
+#         logger.info("Updated verified_stats cache")
+#         return HTMLResponse(content=html_content)
     
 
-@app.get("/statspg")
+@app.get("/stats")
 @limiter.limit("60/minute")
 async def verified_statspg(request: Request):    
     """postgress stats"""
