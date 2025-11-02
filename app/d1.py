@@ -1,5 +1,6 @@
 import json
 import logging
+import traceback
 import requests
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -131,6 +132,7 @@ class D1Handler:
         except Exception as e:
             print(f"Error inserting SignedResponse: {e}")
             logger.error(f"Error inserting SignedResponse: {e}")
+            traceback.print_exc()
             return False
         
     def insert_completion_request(self, unique_id: str, hotkey: str, provider: str, cr: ChatCompletionRequest) -> bool:
