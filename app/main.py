@@ -53,14 +53,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
-
+MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access
 METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
-IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for recent verification
-MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=300)  # 5 minutes
-MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600)  # 10 minutes
-PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
+IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for is_verified
+MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
+MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
+PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=1800) # 30 minutes
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
@@ -199,33 +198,6 @@ def save_request_data(
         app.state.exceptions += 1
 
 
-# def save_request_data(
-#     signed_response: SignedResponse,
-#     request_id: str,
-#     duration: float,
-#     provider: str,
-#     x_nonce: str,
-#     x_hotkey: str,
-#     completion_request: ChatCompletionRequest
-# ):
-#     """Background function to insert all request-related data into D1."""
-#     try:
-#         # Batch insert all data
-#         success = d1_client.insert_batch_request_data(
-#             signed_response, request_id, duration, provider, x_nonce, x_hotkey, completion_request
-#         )
-#         if success:
-#             logger.debug(f"Batch inserted data for request {request_id}")
-#         else:
-#             logger.error(f"Batch insert failed for request {request_id}")
-#             app.state.exceptions += 1  # Increment if needed
-#     except Exception as e:
-#         logger.error(f"Error in background batch insert for request {request_id}: {str(e)}")
-#         app.state.exceptions += 1
-
-
-
-
 
 limiter = Limiter(key_func=get_client_ip)
 
@@ -290,8 +262,7 @@ app = FastAPI(
     version=app_version,
     description="Proxy for verified inference with Bittensor integration, providing trusted LLM completions.",
     debug=False,
-    lifespan=lifespan,
-    # openapi_url="/api-docs.json"  # Optional: Change OpenAPI JSON path
+    lifespan=lifespan    
 )
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
@@ -379,21 +350,21 @@ async def get_public_key(request: Request):
 
 @app.get("/log")
 @limiter.limit("60/minute")
-async def verified_log(request: Request):   
+async def verified_logpg(request: Request):   
     request_ip = get_client_ip(request)
-    ts = str(int(time.time()))    
-    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
+    ts = str(int(time.time()))
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
     cache_key = "verified_miner_log_html"
     if cache_key in MINER_LOG_CACHE:
         html_content = MINER_LOG_CACHE[cache_key]
         return HTMLResponse(content=html_content)
     else:
-        #verified = await d1_client.select_all_signed_responses(top=250)
+        
         DATABASE_URL = os.environ.get("DATABASE_URL", "")
         if not DATABASE_URL:
             return HTMLResponse(content="<pre>no db</pre>")
         handler = PGHandler(DATABASE_URL)
-        verified = handler.select_signed_responses(limit=250)
+        verified = handler.select_signed_responses(limit=500)
 
         html_content = HTMLLog.render_verified_display(
             verified=verified,
@@ -465,7 +436,9 @@ async def is_verified(request: Request, hotkey: str):
         return JSONResponse(status_code=200, content=cached_result)
     
     since_date = datetime.now(timezone.utc) - timedelta(hours=IS_VERIFIED_HOUR_DELTA)
-    latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=10)
+    pg_helper = PGHandler(os.environ.get("DATABASE_URL", ""))
+    latest = pg_helper.select_signed_response_by_miner_hotkey(hotkey=hotkey, limit=10)
+    #latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=10)
     if not latest or len(latest) == 0:
         result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}    
     elif len(latest) < 5:
