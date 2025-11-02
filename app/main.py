@@ -13,6 +13,7 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 
+from app.dei_engine import DiversityIncentiveEngine
 from app.pg_helper import PGHandler
 load_dotenv()
 from app.html_log import HTMLLog
@@ -187,6 +188,7 @@ async def lifespan(app: FastAPI):
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0    
+    app.state.dei_engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)
     # Start the metagraph manager
     metagraph_manager.start()
     
@@ -393,6 +395,24 @@ async def provider_log(request: Request):
         return HTMLResponse(content=infos)
     logging.warning("Cache Broken")
     return HTMLResponse(content="<pre>Cache Empty</pre>")
+
+
+@app.get("/mix")
+@limiter.limit("60/minute")
+async def model_mix(request: Request):
+    request_ip = get_client_ip(request)
+    logger.info(f"mix endpoint accessed from IP {request_ip}")
+    #its already cached
+    # cache_key = "diveristy_infos_html"
+    # if cache_key in PROVIDER_PING_CACHE:
+    #     logger.info(f"providers endpoint accessed from IP {request_ip} - using cached data")
+    #     infos = PROVIDER_PING_CACHE[cache_key]
+    #     return HTMLResponse(content=infos)
+    # logging.warning("Cache Broken")
+    # return HTMLResponse(content="<pre>Cache Empty</pre>")
+    report = app.state.dei_engine.generate_epoch_report()
+    return HTMLResponse(content=f"<pre>{report}</pre>")
+
 
 
 @app.get("/is_verified")
@@ -604,6 +624,12 @@ async def forward_proxy_request(
             x_hotkey,
             completion_request
         )
+
+        try:
+            app.state.dei_engine.submit_proof(x_hotkey, completion_request.model)
+        except Exception as e:
+            logger.error(f"DEI engine not initialized for request {request_id}: {str(e)}")
+            pass
 
         app.state.total_requests += 1
         logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")
