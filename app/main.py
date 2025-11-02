@@ -175,8 +175,8 @@ def save_request_data(
         # logger.debug(f"Inserted used nonce for request {request_id}")
         
         # # Insert completion request
-        d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
-        logger.debug(f"Inserted completion request for request {request_id}")
+        # d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
+        # logger.debug(f"Inserted completion request for request {request_id}")
         
     except Exception as e:
         logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
