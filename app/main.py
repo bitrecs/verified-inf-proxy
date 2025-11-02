@@ -54,7 +54,7 @@ MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
 
 METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
-IS_VERIFIED_HOUR_DELTA = 4  # Look back this many hours for recent verification
+IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for recent verification
 MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=300)  # 5 minutes
 MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600)  # 10 minutes
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
