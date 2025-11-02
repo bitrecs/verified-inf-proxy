@@ -166,9 +166,10 @@ def save_request_data(
 ):
     """Background function to insert all request-related data into D1."""
     try:
+        return
         # Insert signed response
-        d1_client.insert_signed_response(signed_response, request_id, duration, provider)
-        logger.debug(f"Inserted signed response for request {request_id}")
+        #d1_client.insert_signed_response(signed_response, request_id, duration, provider)
+        #logger.debug(f"Inserted signed response for request {request_id}")
         
         # Insert used nonce
         # d1_client.insert_used_nonce(x_nonce, x_hotkey)
