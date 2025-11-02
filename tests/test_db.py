@@ -187,3 +187,67 @@ def test_used_nonce_denied():
     exists = d1_handler.check_nonce_used(nonce)
     print("Nonce exists after first insert:", exists)
     assert exists is True
+
+
+def test_insert_batch_request():
+    d1_handler = D1Handler(
+        account_id=CF_ACCOUNT_ID,
+        token=CF_D1_TOKEN,
+        database_id=CF_D1_DATABASE_ID
+    )
+    unique_id = secrets.token_hex(16)    
+    SignedResponse_example = SignedResponse(
+        response={
+            "id": "chatcmpl-7aX8bYzEXAMPLE",
+            "object": "chat.completion",
+            "created": 1695180000,
+            "model": "gpt-4o-mini",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",    
+                        "content": "Hello! How can I assist you today?"
+                    },
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 10,
+                "total_tokens": 20
+            }
+        },
+        proof={
+            "unique_id": unique_id,
+            "request_hash": "reqhash1234567890abcdef",
+            "response_hash": "resphash1234567890abcdef",
+            "hotkey": "test_hotkey_123",
+            "model": "gpt-4o-mini"
+        },
+        signature="abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        timestamp="2024-06-20T12:00:00Z",
+        ttl="2024-06-27T12:00:00Z"
+    )   
+
+    # Add missing arguments for the batch method
+    from app.models import ChatCompletionRequest  # Import if needed
+    completion_request = ChatCompletionRequest(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Test message"}]
+    )
+    provider = "test_provider"
+    x_nonce = secrets.token_hex(16)
+    x_hotkey = "test_hotkey_batch"
+
+    result = d1_handler.insert_batch_request_data(
+        signed_response=SignedResponse_example,
+        request_id="test_request_id_batch_123",
+        duration=1.23,
+        provider=provider,
+        x_nonce=x_nonce,
+        x_hotkey=x_hotkey,
+        completion_request=completion_request
+    )
+    print("D1 Insert Batch Request Result:", result)
+    assert True is result

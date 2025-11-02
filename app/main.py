@@ -155,6 +155,34 @@ async def refresh_provider_pings():
         await asyncio.sleep(1800)  # Refresh every 30 minutes
 
 
+# def save_request_data(
+#     signed_response: SignedResponse,
+#     request_id: str,
+#     duration: float,
+#     provider: str,
+#     x_nonce: str,
+#     x_hotkey: str,
+#     completion_request: ChatCompletionRequest
+# ):
+#     """Background function to insert all request-related data into D1."""
+#     try:
+#         # Insert signed response
+#         d1_client.insert_signed_response(signed_response, request_id, duration, provider)
+#         logger.debug(f"Inserted signed response for request {request_id}")
+        
+#         # Insert used nonce
+#         d1_client.insert_used_nonce(x_nonce, x_hotkey)
+#         logger.debug(f"Inserted used nonce for request {request_id}")
+        
+#         # # Insert completion request
+#         d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
+#         logger.debug(f"Inserted completion request for request {request_id}")
+        
+#     except Exception as e:
+#         logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
+#         app.state.exceptions += 1
+
+
 def save_request_data(
     signed_response: SignedResponse,
     request_id: str,
@@ -166,21 +194,20 @@ def save_request_data(
 ):
     """Background function to insert all request-related data into D1."""
     try:
-        # Insert signed response
-        d1_client.insert_signed_response(signed_response, request_id, duration, provider)
-        logger.debug(f"Inserted signed response for request {request_id}")
-        
-        # Insert used nonce
-        d1_client.insert_used_nonce(x_nonce, x_hotkey)
-        logger.debug(f"Inserted used nonce for request {request_id}")
-        
-        # # Insert completion request
-        d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
-        logger.debug(f"Inserted completion request for request {request_id}")
-        
+        # Batch insert all data
+        success = d1_client.insert_batch_request_data(
+            signed_response, request_id, duration, provider, x_nonce, x_hotkey, completion_request
+        )
+        if success:
+            logger.debug(f"Batch inserted data for request {request_id}")
+        else:
+            logger.error(f"Batch insert failed for request {request_id}")
+            app.state.exceptions += 1  # Increment if needed
     except Exception as e:
-        logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
+        logger.error(f"Error in background batch insert for request {request_id}: {str(e)}")
         app.state.exceptions += 1
+
+
 
 
 

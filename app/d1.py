@@ -227,3 +227,84 @@ class D1Handler:
             print(f"Error checking nonce usage: {e}")
             logger.error(f"Error checking nonce usage: {e}")
             return False
+        
+    
+    def insert_batch_request_data(self,
+        signed_response: SignedResponse,
+        request_id: str,
+        duration: float,
+        provider: str,
+        x_nonce: str,
+        x_hotkey: str,
+        completion_request: ChatCompletionRequest
+    ) -> bool:
+        """Batch insert all request-related data into D1 using a single API call."""
+        try:
+            url = f"{self.base_url}/query"
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Prepare batch queries
+            queries = []
+            
+            # 1. Insert signed response
+            duration_rounded = round(duration, 4)
+            sql1 = """
+            INSERT INTO signed_responses (unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, response_json, duration, provider)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            params1 = [
+                signed_response.proof['unique_id'],
+                signed_response.proof['request_hash'],
+                signed_response.proof['response_hash'],
+                signed_response.proof['hotkey'],
+                signed_response.proof['model'],
+                signed_response.signature,
+                signed_response.timestamp,
+                signed_response.ttl,
+                json.dumps(signed_response.response),
+                duration_rounded,
+                provider
+            ]
+            queries.append({"sql": sql1, "params": params1})
+            
+            # 2. Insert used nonce
+            sql2 = "INSERT INTO used_nonces (nonce, hotkey, timestamp) VALUES (?, ?, ?)"
+            timestamp_now = datetime.now(timezone.utc).isoformat()
+            params2 = [x_nonce, x_hotkey, timestamp_now]
+            queries.append({"sql": sql2, "params": params2})
+            
+            # 3. Insert completion request
+            sql3 = """
+            INSERT INTO completion_requests (unique_id, hotkey, provider, model, messages_json, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """
+            request_json = json.dumps(completion_request.model_dump(), sort_keys=True, default=str)
+            params3 = [
+                request_id,
+                x_hotkey,
+                provider,
+                str(completion_request.model),
+                request_json,
+                timestamp_now
+            ]
+            queries.append({"sql": sql3, "params": params3})
+            
+            # Send batch request
+            payload = queries  # Array of query objects
+            resp = requests.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            result = resp.json()
+            
+            # Check if all succeeded (D1 returns an array of results)
+            if result.get('success') and len(result.get('result', [])) == len(queries):
+                logger.debug(f"Batch insert succeeded for request {request_id}")
+                return True
+            else:
+                logger.error(f"Batch insert failed for request {request_id}: {result}")
+                return False
+        except Exception as e:
+            logger.error(f"Error in batch insert for request {request_id}: {str(e)}")
+            return False
