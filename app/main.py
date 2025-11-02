@@ -12,6 +12,8 @@ import logging
 import threading
 import tracemalloc
 from dotenv import load_dotenv
+
+from app.pg_helper import PGHandler
 load_dotenv()
 from app.d1 import D1Handler
 from app.html_log import HTMLLog
@@ -403,6 +405,35 @@ async def verified_stats(request: Request):
         MINER_STATS_CACHE[cache_key] = html_content
         logger.info("Updated verified_stats cache")
         return HTMLResponse(content=html_content)
+    
+
+@app.get("/statspg")
+@limiter.limit("60/minute")
+async def verified_statspg(request: Request):    
+    """postgress stats"""
+    request_ip = get_client_ip(request)
+    ts = str(int(time.time()))    
+    logger.info(f"verified_stats endpoint accessed from IP {request_ip} at {ts}")
+    cache_key = "verified_miner_stats_html_pg"
+    if cache_key in MINER_STATS_CACHE:
+        html_content = MINER_STATS_CACHE[cache_key]
+        return HTMLResponse(content=html_content)
+    else:
+        TEST_DB_URL = os.environ.get("POSTGRESS_DB_URL", "")
+        if not TEST_DB_URL:
+            return HTMLResponse(content="<pre>no db</pre>")
+        handler = PGHandler(TEST_DB_URL)
+        verified = handler.select_signed_responses(limit=1000)
+        html_content = HTMLStats.render_verified_stats(
+            verified=verified,
+            bt_network=BT_NETWORK,
+            bt_netuid=BT_NETUID
+        )
+        MINER_STATS_CACHE[cache_key] = html_content
+        logger.info("Updated verified_stats cache from pg")
+        return HTMLResponse(content=html_content)
+        
+   
 
 
 @app.get("/providers")
