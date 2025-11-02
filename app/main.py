@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server starting up")
     tracemalloc.start()    
     app.state.thread_pool = ThreadPoolExecutor(
-        max_workers=2,
+        max_workers=4,
         thread_name_prefix="D1-Writer"
     )    
     app.state.last_updated = None
@@ -473,12 +473,18 @@ async def forward_proxy_request(
             else:
                 REQUEST_HASH_HISTORY[miner_request_key] = True
 
-        if 1==1:
+        if 1==2:
             if x_nonce in NONCE_HISTORY:
                 logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
                 raise HTTPException(400, "Replay attack detected: Nonce has already been used")
             else:
                 NONCE_HISTORY[x_nonce] = True
+                
+        if 1==2:
+            nonce_exists = d1_client.check_nonce_used(x_nonce)
+            if nonce_exists:
+                logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
+                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
 
   
         provider = LLMProvider.from_str(x_provider)
@@ -568,6 +574,15 @@ async def forward_proxy_request(
             d1_client.insert_used_nonce,
             x_nonce,
             x_hotkey
+        )
+
+        loop.run_in_executor(
+            app.state.thread_pool,
+            d1_client.insert_completion_request,
+            request_id,
+            x_hotkey,            
+            str(provider),
+            completion_request
         )
 
         app.state.total_requests += 1
