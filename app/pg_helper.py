@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import traceback
 import psycopg
 from datetime import datetime, timezone
@@ -9,6 +10,11 @@ load_dotenv()
 from app.models import ChatCompletionRequest, SignedResponse
 
 logger = logging.getLogger(__name__)
+
+
+BT_NETUID = os.getenv("BT_NETUID", "296")
+TABLE_NAME = "vi.signed_responses" if BT_NETUID == "296" else "vi.signed_responses_mainnet"
+
 
 class PGHandler:
     def __init__(self, db_url: str):
@@ -26,7 +32,7 @@ class PGHandler:
         try:
             conn = self.connect()
             with conn.cursor() as cur:
-                sql = f"SELECT * FROM vi.signed_responses ORDER BY timestamp DESC LIMIT {limit}"
+                sql = f"SELECT * FROM {TABLE_NAME} ORDER BY timestamp DESC LIMIT {limit}"
                 cur.execute(sql)
                 rows = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
@@ -46,7 +52,7 @@ class PGHandler:
         try:
             conn = self.connect()
             with conn.cursor() as cur:
-                sql = f"SELECT * FROM vi.signed_responses WHERE hotkey = %s ORDER BY timestamp DESC LIMIT {limit}"
+                sql = f"SELECT * FROM {TABLE_NAME} WHERE hotkey = %s ORDER BY timestamp DESC LIMIT {limit}"
                 cur.execute(sql, (hotkey,))
                 row = cur.fetchone()
                 if row:
@@ -71,7 +77,7 @@ class PGHandler:
             conn = self.connect()
             with conn.cursor() as cur:
                 sql = f"""
-                SELECT * FROM vi.signed_responses 
+                SELECT * FROM {TABLE_NAME} 
                 WHERE hotkey = %s AND created_at >= %s 
                 ORDER BY created_at DESC LIMIT {limit}
                 """
@@ -91,7 +97,7 @@ class PGHandler:
     
 
     def insert_signed_response(self, unique_id: str,  response: SignedResponse, duration: float = 0, provider: str = "", x_nonce: str = "", x_hotkey: str = "", completion_request: ChatCompletionRequest = None) -> bool:
-        """Insert all data into the single vi.signed_responses table."""
+        """Insert all data into the single {vi.signed_responses} table."""
         try:
             conn = self.connect()
             with conn.cursor() as cur:
@@ -120,11 +126,18 @@ class PGHandler:
                     logger.error("JSON data too large")
                     return False
                 
-                sql = """
-                INSERT INTO vi.signed_responses (
-                    unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
+                if 1==1:
+                    sql = """
+                    INSERT INTO vi.signed_responses (
+                        unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                else:
+                    sql = """
+                    INSERT INTO vi.signed_responses (
+                        unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
                 
                 params = (
                     response.proof.get('unique_id') or '',

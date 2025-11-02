@@ -15,7 +15,6 @@ from dotenv import load_dotenv
 
 from app.pg_helper import PGHandler
 load_dotenv()
-from app.d1 import D1Handler
 from app.html_log import HTMLLog
 from app.html_stats import HTMLStats
 from app.llm_providers import LLMProvider, LLMProviderStats
@@ -72,11 +71,6 @@ if not B64_PRIVATE_KEY:
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
 
-CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
-CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
-CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID", "")
-if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
-    raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
 
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
@@ -87,11 +81,6 @@ client = httpx.AsyncClient(
     )
 )
 
-d1_client = D1Handler(
-    account_id=CF_ACCOUNT_ID,
-    token=CF_D1_TOKEN,
-    database_id=CF_D1_DATABASE_ID
-)
 
 metagraph_manager = MetagraphSyncManager(
     network=BT_NETWORK,
@@ -165,20 +154,8 @@ def save_request_data(
     x_hotkey: str,
     completion_request: ChatCompletionRequest
 ) -> bool:
-    """Background function to insert all request-related data into D1."""
-    try:
-        # Insert signed response
-        #d1_client.insert_signed_response(signed_response, request_id, duration, provider)
-        #logger.debug(f"Inserted signed response for request {request_id}")
-        
-        # Insert used nonce
-        # d1_client.insert_used_nonce(x_nonce, x_hotkey)
-        # logger.debug(f"Inserted used nonce for request {request_id}")
-        
-        # # Insert completion request
-        # d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
-        # logger.debug(f"Inserted completion request for request {request_id}")
-        # unique_id: str,  response: SignedResponse, duration: float = 0, provider: str = "", x_nonce: str = "", x_hotkey: str = "", completion_request: ChatCompletionRequest = None
+    """Background function to insert all request-related data into postgress"""
+    try:       
 
         pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
         result = pg_handler.insert_signed_response(
@@ -190,9 +167,7 @@ def save_request_data(
             x_hotkey=x_hotkey,
             completion_request=completion_request
         )
-        return result
-
-        
+        return result        
     except Exception as e:
         logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
         app.state.exceptions += 1
@@ -206,9 +181,9 @@ async def lifespan(app: FastAPI):
     logger.info("Server starting up")
     tracemalloc.start()    
     app.state.thread_pool = ThreadPoolExecutor(
-        max_workers=4,
-        thread_name_prefix="D1-Writer"
-    )    
+        max_workers=2,
+        thread_name_prefix="PG-Writer"
+    )
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0    
@@ -248,7 +223,7 @@ async def lifespan(app: FastAPI):
         # Stop metagraph manager
         metagraph_manager.stop()
         await client.aclose()
-        logger.info("Shutting down D1 writer thread pool...")
+        logger.info("Shutting down PG writer thread pool...")
         app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
@@ -436,10 +411,8 @@ async def is_verified(request: Request, hotkey: str):
         return JSONResponse(status_code=200, content=cached_result)
     
     since_date = datetime.now(timezone.utc) - timedelta(hours=IS_VERIFIED_HOUR_DELTA)
-    pg_helper = PGHandler(os.environ.get("DATABASE_URL", ""))
-    #latest = pg_helper.select_signed_response_by_miner_hotkey(hotkey=hotkey, limit=10)
-    latest = pg_helper.select_signed_response_by_miner_hotkey_since(hotkey=hotkey, since_date=since_date, limit=10)
-    #latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=10)
+    pg_helper = PGHandler(os.environ.get("DATABASE_URL", ""))    
+    latest = pg_helper.select_signed_response_by_miner_hotkey_since(hotkey=hotkey, since_date=since_date, limit=10)    
     if not latest or len(latest) == 0:
         result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}    
     elif len(latest) < 5:
@@ -539,11 +512,11 @@ async def forward_proxy_request(
             else:
                 NONCE_HISTORY[x_nonce] = True
                 
-        if 1==2:
-            nonce_exists = d1_client.check_nonce_used(x_nonce)
-            if nonce_exists:
-                logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
-                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
+        # if 1==2:
+        #     nonce_exists = d1_client.check_nonce_used(x_nonce)
+        #     if nonce_exists:
+        #         logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
+        #         raise HTTPException(400, "Replay attack detected: Nonce has already been used")
 
   
         provider = LLMProvider.from_str(x_provider)
