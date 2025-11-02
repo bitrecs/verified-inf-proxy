@@ -181,7 +181,7 @@ def save_request_data(
         # logger.debug(f"Inserted completion request for request {request_id}")
         # unique_id: str,  response: SignedResponse, duration: float = 0, provider: str = "", x_nonce: str = "", x_hotkey: str = "", completion_request: ChatCompletionRequest = None
 
-        pg_handler = PGHandler(os.environ.get("POSTGRESS_DB_URL", ""))
+        pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
         result = pg_handler.insert_signed_response(
             unique_id=request_id,
             response=signed_response,
@@ -388,7 +388,13 @@ async def verified_log(request: Request):
         html_content = MINER_LOG_CACHE[cache_key]
         return HTMLResponse(content=html_content)
     else:
-        verified = await d1_client.select_all_signed_responses(top=250)
+        #verified = await d1_client.select_all_signed_responses(top=250)
+        DATABASE_URL = os.environ.get("DATABASE_URL", "")
+        if not DATABASE_URL:
+            return HTMLResponse(content="<pre>no db</pre>")
+        handler = PGHandler(DATABASE_URL)
+        verified = handler.select_signed_responses(limit=250)
+
         html_content = HTMLLog.render_verified_display(
             verified=verified,
             bt_network=BT_NETWORK,
@@ -398,54 +404,6 @@ async def verified_log(request: Request):
         logger.info("Updated verified_log cache")
         return HTMLResponse(content=html_content)
 
-@app.get("/logpg")
-@limiter.limit("60/minute")
-async def verified_logpg(request: Request):   
-    request_ip = get_client_ip(request)
-    ts = str(int(time.time()))    
-    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
-    cache_key = "verified_miner_log_html"
-    if cache_key in MINER_LOG_CACHE:
-        html_content = MINER_LOG_CACHE[cache_key]
-        return HTMLResponse(content=html_content)
-    else:
-        TEST_DB_URL = os.environ.get("POSTGRESS_DB_URL", "")
-        if not TEST_DB_URL:
-            return HTMLResponse(content="<pre>no db</pre>")
-        handler = PGHandler(TEST_DB_URL)
-        verified = handler.select_signed_responses(limit=250)
-        html_content = HTMLLog.render_verified_display(
-            verified=verified,
-            bt_network=BT_NETWORK,
-            bt_netuid=BT_NETUID
-        )
-        MINER_LOG_CACHE[cache_key] = html_content
-        logger.info("Updated verified_log cache from pg")
-        return HTMLResponse(content=html_content)
-       
-
-
-# @app.get("/stats")
-# @limiter.limit("60/minute")
-# async def verified_stats(request: Request):    
-#     request_ip = get_client_ip(request)
-#     ts = str(int(time.time()))    
-#     logger.info(f"verified_stats endpoint accessed from IP {request_ip} at {ts}")
-#     cache_key = "verified_miner_stats_html"
-#     if cache_key in MINER_STATS_CACHE:
-#         html_content = MINER_STATS_CACHE[cache_key]
-#         return HTMLResponse(content=html_content)
-#     else:
-#         verified = await d1_client.select_all_signed_responses(top=1000)
-#         html_content = HTMLStats.render_verified_stats(
-#             verified=verified,
-#             bt_network=BT_NETWORK,
-#             bt_netuid=BT_NETUID
-#         )
-#         MINER_STATS_CACHE[cache_key] = html_content
-#         logger.info("Updated verified_stats cache")
-#         return HTMLResponse(content=html_content)
-    
 
 @app.get("/stats")
 @limiter.limit("60/minute")
@@ -459,10 +417,10 @@ async def verified_statspg(request: Request):
         html_content = MINER_STATS_CACHE[cache_key]
         return HTMLResponse(content=html_content)
     else:
-        TEST_DB_URL = os.environ.get("POSTGRESS_DB_URL", "")
-        if not TEST_DB_URL:
+        DATABASE_URL = os.environ.get("DATABASE_URL", "")
+        if not DATABASE_URL:
             return HTMLResponse(content="<pre>no db</pre>")
-        handler = PGHandler(TEST_DB_URL)
+        handler = PGHandler(DATABASE_URL)
         verified = handler.select_signed_responses(limit=1000)
         html_content = HTMLStats.render_verified_stats(
             verified=verified,
