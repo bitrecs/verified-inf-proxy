@@ -120,3 +120,22 @@ def test_render_verfied_stats_from_pg():
     
     # Assert some content was generated
     assert len(html_content) > 0, "HTML content should not be empty"
+
+def test_select_signed_response_by_miner_hotkey_since():
+    """Unit test for PGHandler.select_signed_response_by_miner_hotkey_since."""
+    from datetime import datetime, timedelta, timezone
+
+    hotkey = "test_hotkey"
+    since_date = datetime.now(timezone.utc) - timedelta(days=365)
+    
+    # Create handler
+    handler = PGHandler(TEST_DB_URL)
+
+    results = handler.select_signed_response_by_miner_hotkey_since(hotkey=hotkey, since_date=since_date, limit=10)
+
+    print(f"Select results for hotkey {hotkey} since {since_date}: {results}")
+    print(f" length: {len(results)} ")
+    
+    # Assert we get a list
+    assert isinstance(results, list), "Results should be a list"
+    assert len(results) >= 5, "Results should have at least 5 entries"

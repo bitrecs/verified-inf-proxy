@@ -24,7 +24,7 @@ class HTMLLog:
             miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
             
             try:
-                response_data = json.loads(item.get('response_json', '{}'))
+                response_data = json.loads(item.get('completion_response', '{}'))
                 if 'choices' in response_data and response_data['choices']:
                     content = response_data['choices'][0].get('message', {}).get('content', '')
                     response_content = content[:300] + '...' if len(content) > 300 else content

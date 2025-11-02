@@ -437,7 +437,8 @@ async def is_verified(request: Request, hotkey: str):
     
     since_date = datetime.now(timezone.utc) - timedelta(hours=IS_VERIFIED_HOUR_DELTA)
     pg_helper = PGHandler(os.environ.get("DATABASE_URL", ""))
-    latest = pg_helper.select_signed_response_by_miner_hotkey(hotkey=hotkey, limit=10)
+    #latest = pg_helper.select_signed_response_by_miner_hotkey(hotkey=hotkey, limit=10)
+    latest = pg_helper.select_signed_response_by_miner_hotkey_since(hotkey=hotkey, since_date=since_date, limit=10)
     #latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=10)
     if not latest or len(latest) == 0:
         result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}    

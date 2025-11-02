@@ -64,6 +64,32 @@ class PGHandler:
             if conn:
                 conn.close()
 
+    def select_signed_response_by_miner_hotkey_since(self, hotkey: str, since_date: datetime, limit=100) -> List[Dict[str, Any]]:
+        """Select signed responses by miner hotkey since a given date."""
+        results = []
+        try:
+            conn = self.connect()
+            with conn.cursor() as cur:
+                sql = f"""
+                SELECT * FROM vi.signed_responses 
+                WHERE hotkey = %s AND created_at >= %s 
+                ORDER BY created_at DESC LIMIT {limit}
+                """
+                cur.execute(sql, (hotkey, since_date))
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                for row in rows:
+                    result = dict(zip(columns, row))
+                    results.append(result)
+                logger.debug(f"Selected {len(results)} signed responses for hotkey: {hotkey} since {since_date}")
+        except Exception as e:
+            logger.error(f"Select failed: {e}")
+        finally:
+            if conn:
+                conn.close()
+        return results
+    
+
     def insert_signed_response(self, unique_id: str,  response: SignedResponse, duration: float = 0, provider: str = "", x_nonce: str = "", x_hotkey: str = "", completion_request: ChatCompletionRequest = None) -> bool:
         """Insert all data into the single vi.signed_responses table."""
         try:
