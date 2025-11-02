@@ -94,45 +94,63 @@ class D1Handler:
             logger.error(f"Error fetching signed responses: {e}")
             return []    
 
+
     def insert_signed_response(self, response: SignedResponse, request_id: str = None, duration: float = 0, provider: str = "") -> bool:
-        """Insert a single SignedResponse into D1. request_id is optional (not in schema, but can be logged or used if added)."""
+        """Insert a single SignedResponse into D1."""
         try:
             url = f"{self.base_url}/query"
             headers = {
                 "Authorization": f"Bearer {self.token}",
                 "Content-Type": "application/json"
             }
-            duration = round(duration, 4)
+            duration_rounded = round(duration, 4)
+            
+            # Serialize response_json safely
+            try:
+                response_json = json.dumps(response.response, default=str, ensure_ascii=False)
+            except (TypeError, ValueError) as e:
+                logger.error(f"Serialization failed for response.response: {e}")
+                return False
+            
+            # Size limit check
+            if len(response_json.encode('utf-8')) > 1000000:  # 1MB in bytes
+                logger.error("Response JSON too large")
+                return False
+            
             sql = """
             INSERT INTO signed_responses (unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, response_json, duration, provider)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
+            
+            # Build params with defaults
             params = [
-                response.proof['unique_id'],
-                response.proof['request_hash'],
-                response.proof['response_hash'],
-                response.proof['hotkey'],
-                response.proof['model'],
-                response.signature,
-                response.timestamp,
-                response.ttl,
-                json.dumps(response.response),
-                duration,
-                provider
+                response.proof.get('unique_id') or '',
+                response.proof.get('request_hash') or '',
+                response.proof.get('response_hash') or '',
+                response.proof.get('hotkey') or '',
+                response.proof.get('model') or '',
+                response.signature or '',
+                response.timestamp or '',
+                response.ttl or '',
+                response_json,
+                str(duration_rounded),
+                provider or ''
             ]
-            payload = {
-                "sql": sql,
-                "params": params
-            }
+            
+            # Ensure all params are strings
+            params = [str(p) for p in params]
+            
+            payload = {"sql": sql, "params": params}
+            
+            # Debug log (remove later)
+            logger.debug(f"Payload: {json.dumps(payload)}")
+            
             resp = requests.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             result = resp.json()
-            is_success = result.get('success', False)  # Checks top-level 'success'
-            return is_success
+            return result.get('success', False)
         except Exception as e:
-            print(f"Error inserting SignedResponse: {e}")
-            logger.error(f"Error inserting SignedResponse: {e}")
-            traceback.print_exc()
+            logger.error(f"Insert failed: {e}")
             return False
         
     def insert_completion_request(self, unique_id: str, hotkey: str, provider: str, cr: ChatCompletionRequest) -> bool:
