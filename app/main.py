@@ -460,7 +460,7 @@ async def is_verified(request: Request, hotkey: str):
 
 
 @app.post("/v1/chat/completions", response_model=SignedResponse)
-@limiter.limit("120/minute")
+@limiter.limit("240/minute")
 async def forward_proxy_request(
     request: Request,
     completion_request: ChatCompletionRequest,
