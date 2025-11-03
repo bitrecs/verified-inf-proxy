@@ -389,16 +389,16 @@ async def provider_log(request: Request):
 async def model_mix(request: Request):
     request_ip = get_client_ip(request)
     logger.info(f"mix endpoint accessed from IP {request_ip}")
-    #its already cached
-    # cache_key = "diveristy_infos_html"
-    # if cache_key in PROVIDER_PING_CACHE:
-    #     logger.info(f"providers endpoint accessed from IP {request_ip} - using cached data")
-    #     infos = PROVIDER_PING_CACHE[cache_key]
-    #     return HTMLResponse(content=infos)
-    # logging.warning("Cache Broken")
-    # return HTMLResponse(content="<pre>Cache Empty</pre>")
-    report = app.state.dei_engine.generate_epoch_report()
-    return HTMLResponse(content=f"<pre>{report}</pre>")
+    try:
+        since_date = datetime.now(timezone.utc) - timedelta(days=7)
+        app.state.dei_engine.load_proofs_from_db(since_date)
+        report = app.state.dei_engine.generate_epoch_report()
+        final = f"<h4>Diversity Incentive Engine - Model Mix (Last 7 Days)</h4>\n"
+        final += f"<pre>{report}</pre>\n"
+        return HTMLResponse(content=final)
+    except Exception as e:
+        logger.error(f"Error generating model mix report: {e}")
+        return HTMLResponse(content="<pre>Error generating report</pre>")
 
 
 
@@ -621,10 +621,10 @@ async def forward_proxy_request(
             completion_request
         )
 
-        try:
-            app.state.dei_engine.submit_proof(x_hotkey, completion_request.model)
-        except Exception as e:
-            logger.error(f"DEI engine not initialized for request {request_id}: {str(e)}")
+        # try:
+        #     app.state.dei_engine.submit_proof(x_hotkey, completion_request.model)
+        # except Exception as e:
+        #     logger.error(f"DEI engine not initialized for request {request_id}: {str(e)}")
 
         app.state.total_requests += 1
         logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")
