@@ -625,7 +625,6 @@ async def forward_proxy_request(
             app.state.dei_engine.submit_proof(x_hotkey, completion_request.model)
         except Exception as e:
             logger.error(f"DEI engine not initialized for request {request_id}: {str(e)}")
-            pass
 
         app.state.total_requests += 1
         logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")
