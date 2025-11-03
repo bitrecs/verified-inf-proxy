@@ -13,15 +13,22 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
-from app.d1 import D1Handler
+
+from cachetools import TTLCache
+from typing import Union, Dict
+from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
 from app.html_stats import HTMLStats
 from app.llm_providers import LLMProvider, LLMProviderStats
-from app.utils import is_valid_hotkey, load_version_info, verify_miner_request, verify_time
+from app.dei_engine import DiversityIncentiveEngine
+from app.utils import (
+    is_valid_hotkey, load_version_info, 
+    verify_miner_request, verify_time
+)
+from slowapi import Limiter
+from slowapi.middleware import SlowAPIMiddleware
 from app.metagraph_sync_manager import MetagraphSyncManager
 from app.models import ChatCompletionRequest, SignedResponse
-from cachetools import TTLCache
-from typing import Union, Dict
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -29,21 +36,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from slowapi import Limiter
-from slowapi.middleware import SlowAPIMiddleware
 
-def get_platform():
-    if os.environ.get('GOOGLE_CLOUD_PROJECT') and os.environ.get('K_SERVICE'):
-        return 'gcp'
-    elif os.environ.get('DO_APP_ID'):
-        return 'do'
-    else:
-        return 'unknown'
-
-log_level = logging.INFO
-if get_platform() == 'gcp':   
-    log_level = logging.DEBUG
-    
+log_level = logging.INFO    
 logging.basicConfig(
     level=log_level,
     format='%(asctime)s | %(levelname)s | %(name)s:%(lineno)d - %(message)s',
@@ -51,14 +45,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access mainnet
-
+MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access
 METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
-IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for recent verification
-MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=300)  # 5 minutes
-MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600)  # 10 minutes
-PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600)  # 1 hour
+IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for is_verified
+MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
+MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
+PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=1800) # 30 minutes
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
@@ -71,11 +64,6 @@ if not B64_PRIVATE_KEY:
 PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(base64.b64decode(B64_PRIVATE_KEY))
 PUBLIC_KEY = PRIVATE_KEY.public_key()
 
-CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
-CF_D1_TOKEN = os.environ.get("CF_D1_TOKEN", "")
-CF_D1_DATABASE_ID = os.environ.get("CF_D1_DATABASE_ID", "")
-if not any([CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID]):
-    raise ValueError("Missing one of CF_ACCOUNT_ID, CF_D1_TOKEN, CF_D1_DATABASE_ID in environment variables")
 
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
@@ -84,12 +72,6 @@ client = httpx.AsyncClient(
         max_keepalive_connections=10,
         keepalive_expiry=15.0
     )
-)
-
-d1_client = D1Handler(
-    account_id=CF_ACCOUNT_ID,
-    token=CF_D1_TOKEN,
-    database_id=CF_D1_DATABASE_ID
 )
 
 metagraph_manager = MetagraphSyncManager(
@@ -163,52 +145,23 @@ def save_request_data(
     x_nonce: str,
     x_hotkey: str,
     completion_request: ChatCompletionRequest
-):
-    """Background function to insert all request-related data into D1."""
+) -> bool:
+    """Background function to insert all request-related data into postgress"""
     try:
-        return
-        # Insert signed response
-        #d1_client.insert_signed_response(signed_response, request_id, duration, provider)
-        #logger.debug(f"Inserted signed response for request {request_id}")
-        
-        # Insert used nonce
-        # d1_client.insert_used_nonce(x_nonce, x_hotkey)
-        # logger.debug(f"Inserted used nonce for request {request_id}")
-        
-        # # Insert completion request
-        # d1_client.insert_completion_request(request_id, x_hotkey, provider, completion_request)
-        # logger.debug(f"Inserted completion request for request {request_id}")
-        
+        pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
+        result = pg_handler.insert_signed_response(
+            unique_id=request_id,
+            response=signed_response,
+            duration=duration,
+            provider=provider,
+            x_nonce=x_nonce,
+            x_hotkey=x_hotkey,
+            completion_request=completion_request
+        )
+        return result        
     except Exception as e:
         logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
         app.state.exceptions += 1
-
-
-# def save_request_data(
-#     signed_response: SignedResponse,
-#     request_id: str,
-#     duration: float,
-#     provider: str,
-#     x_nonce: str,
-#     x_hotkey: str,
-#     completion_request: ChatCompletionRequest
-# ):
-#     """Background function to insert all request-related data into D1."""
-#     try:
-#         # Batch insert all data
-#         success = d1_client.insert_batch_request_data(
-#             signed_response, request_id, duration, provider, x_nonce, x_hotkey, completion_request
-#         )
-#         if success:
-#             logger.debug(f"Batch inserted data for request {request_id}")
-#         else:
-#             logger.error(f"Batch insert failed for request {request_id}")
-#             app.state.exceptions += 1  # Increment if needed
-#     except Exception as e:
-#         logger.error(f"Error in background batch insert for request {request_id}: {str(e)}")
-#         app.state.exceptions += 1
-
-
 
 
 
@@ -219,13 +172,13 @@ async def lifespan(app: FastAPI):
     logger.info("Server starting up")
     tracemalloc.start()    
     app.state.thread_pool = ThreadPoolExecutor(
-        max_workers=4,
-        thread_name_prefix="D1-Writer"
-    )    
+        max_workers=2,
+        thread_name_prefix="PG-Writer"
+    )
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0    
-    # Start the metagraph manager
+    app.state.dei_engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)    
     metagraph_manager.start()
     
     # Background task to restart manager if dead
@@ -256,12 +209,11 @@ async def lifespan(app: FastAPI):
             await app.state.restart_task
             await app.state.refresh_task
         except asyncio.CancelledError:
-            pass
+            pass        
         
-        # Stop metagraph manager
         metagraph_manager.stop()
         await client.aclose()
-        logger.info("Shutting down D1 writer thread pool...")
+        logger.info("Shutting down PG writer thread pool...")
         app.state.thread_pool.shutdown(wait=True, cancel_futures=False)
         gc.collect()
         logger.info(f"Shutdown complete. Final thread count: {threading.active_count()}")
@@ -275,11 +227,11 @@ app = FastAPI(
     version=app_version,
     description="Proxy for verified inference with Bittensor integration, providing trusted LLM completions.",
     debug=False,
-    lifespan=lifespan,
-    # openapi_url="/api-docs.json"  # Optional: Change OpenAPI JSON path
+    lifespan=lifespan    
 )
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -364,16 +316,20 @@ async def get_public_key(request: Request):
 
 @app.get("/log")
 @limiter.limit("60/minute")
-async def verified_log(request: Request):   
+async def verified_logpg(request: Request):   
     request_ip = get_client_ip(request)
-    ts = str(int(time.time()))    
-    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")    
+    ts = str(int(time.time()))
+    logger.info(f"verified_log endpoint accessed from IP {request_ip} at {ts}")
     cache_key = "verified_miner_log_html"
     if cache_key in MINER_LOG_CACHE:
         html_content = MINER_LOG_CACHE[cache_key]
         return HTMLResponse(content=html_content)
-    else:
-        verified = await d1_client.select_all_signed_responses(top=250)
+    else:        
+        DATABASE_URL = os.environ.get("DATABASE_URL", "")
+        if not DATABASE_URL:
+            return HTMLResponse(content="<pre>no db</pre>")
+        handler = PGHandler(DATABASE_URL)
+        verified = handler.select_signed_responses(limit=500)
         html_content = HTMLLog.render_verified_display(
             verified=verified,
             bt_network=BT_NETWORK,
@@ -386,24 +342,31 @@ async def verified_log(request: Request):
 
 @app.get("/stats")
 @limiter.limit("60/minute")
-async def verified_stats(request: Request):    
+async def verified_statspg(request: Request):    
+    """postgress stats"""
     request_ip = get_client_ip(request)
     ts = str(int(time.time()))    
     logger.info(f"verified_stats endpoint accessed from IP {request_ip} at {ts}")
-    cache_key = "verified_miner_stats_html"
+    cache_key = "verified_miner_stats_html_pg"
     if cache_key in MINER_STATS_CACHE:
         html_content = MINER_STATS_CACHE[cache_key]
         return HTMLResponse(content=html_content)
     else:
-        verified = await d1_client.select_all_signed_responses(top=1000)
+        DATABASE_URL = os.environ.get("DATABASE_URL", "")
+        if not DATABASE_URL:
+            return HTMLResponse(content="<pre>no db</pre>")
+        handler = PGHandler(DATABASE_URL)
+        verified = handler.select_signed_responses(limit=1000)
         html_content = HTMLStats.render_verified_stats(
             verified=verified,
             bt_network=BT_NETWORK,
             bt_netuid=BT_NETUID
         )
         MINER_STATS_CACHE[cache_key] = html_content
-        logger.info("Updated verified_stats cache")
+        logger.info("Updated verified_stats cache from pg")
         return HTMLResponse(content=html_content)
+        
+   
 
 
 @app.get("/providers")
@@ -419,6 +382,24 @@ async def provider_log(request: Request):
         return HTMLResponse(content=infos)
     logging.warning("Cache Broken")
     return HTMLResponse(content="<pre>Cache Empty</pre>")
+
+
+@app.get("/mix")
+@limiter.limit("60/minute")
+async def model_mix(request: Request):
+    request_ip = get_client_ip(request)
+    logger.info(f"mix endpoint accessed from IP {request_ip}")
+    #its already cached
+    # cache_key = "diveristy_infos_html"
+    # if cache_key in PROVIDER_PING_CACHE:
+    #     logger.info(f"providers endpoint accessed from IP {request_ip} - using cached data")
+    #     infos = PROVIDER_PING_CACHE[cache_key]
+    #     return HTMLResponse(content=infos)
+    # logging.warning("Cache Broken")
+    # return HTMLResponse(content="<pre>Cache Empty</pre>")
+    report = app.state.dei_engine.generate_epoch_report()
+    return HTMLResponse(content=f"<pre>{report}</pre>")
+
 
 
 @app.get("/is_verified")
@@ -437,7 +418,8 @@ async def is_verified(request: Request, hotkey: str):
         return JSONResponse(status_code=200, content=cached_result)
     
     since_date = datetime.now(timezone.utc) - timedelta(hours=IS_VERIFIED_HOUR_DELTA)
-    latest = await d1_client.select_signed_responses_by_hotkey_since(hotkey=hotkey, since_date=since_date, top=10)
+    pg_helper = PGHandler(os.environ.get("DATABASE_URL", ""))    
+    latest = pg_helper.select_signed_response_by_miner_hotkey_since(hotkey=hotkey, since_date=since_date, limit=10)    
     if not latest or len(latest) == 0:
         result = {"verified": False, "hotkey": hotkey, "message": "No verified responses found"}    
     elif len(latest) < 5:
@@ -450,21 +432,29 @@ async def is_verified(request: Request, hotkey: str):
         #logger.info(f"Latest response timestamp: {timestamp_str}, model: {model}, provider: {provider}")
         if not timestamp_str:
             result = {"verified": False, "hotkey": hotkey, "message": "No timestamp in latest response"}
-        else:
-            try:
-                timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-            except ValueError:
-                result = {"verified": False, "message": "Invalid timestamp format"}
-            else:
-                age_seconds = (datetime.now(timezone.utc) - timestamp).total_seconds()
-                if age_seconds > IS_VERIFIED_HOUR_DELTA * 3600:
-                    result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {IS_VERIFIED_HOUR_DELTA} hours"}
-                else:
-                    total_responses = len(latest)
-                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has {total_responses} verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
+            return JSONResponse(status_code=200, content=result)        
+
+        try:
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except ValueError:
+            result = {"verified": False, "message": "Invalid timestamp format"}
+            return JSONResponse(status_code=200, content=result)
+
+        age_seconds = (datetime.now(timezone.utc) - timestamp).total_seconds()
+        if age_seconds > IS_VERIFIED_HOUR_DELTA * 3600:
+            result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {IS_VERIFIED_HOUR_DELTA} hours"}
+        else:                    
+            result = {
+                "verified": True,
+                "hotkey": hotkey,
+                "message": f"Hotkey has {len(latest)} verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)",
+                "latest_timestamp": timestamp_str,
+                "latest_model": model,
+                "latest_provider": provider
+            }
     
     IS_VERIFIED_CACHE[hotkey] = result
-    logger.info(f"\033[32mCached result for hotkey {hotkey}: {result['verified']}\033[0m")
+    logger.info(f"\033[32mIs Verified cached result {hotkey}: {result['verified']}\033[0m")
     return JSONResponse(status_code=200, content=result)
 
 
@@ -483,7 +473,8 @@ async def forward_proxy_request(
 ) -> SignedResponse:
     
     client_ip = get_client_ip(request)    
-    request_id = str(uuid.uuid4())
+    #request_id = str(uuid.uuid4())
+    request_id = secrets.token_hex(16)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
 
@@ -537,11 +528,11 @@ async def forward_proxy_request(
             else:
                 NONCE_HISTORY[x_nonce] = True
                 
-        if 1==2:
-            nonce_exists = d1_client.check_nonce_used(x_nonce)
-            if nonce_exists:
-                logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
-                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
+        # if 1==2:
+        #     nonce_exists = d1_client.check_nonce_used(x_nonce)
+        #     if nonce_exists:
+        #         logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
+        #         raise HTTPException(400, "Replay attack detected: Nonce has already been used")
 
   
         provider = LLMProvider.from_str(x_provider)
@@ -629,6 +620,11 @@ async def forward_proxy_request(
             x_hotkey,
             completion_request
         )
+
+        try:
+            app.state.dei_engine.submit_proof(x_hotkey, completion_request.model)
+        except Exception as e:
+            logger.error(f"DEI engine not initialized for request {request_id}: {str(e)}")
 
         app.state.total_requests += 1
         logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")
