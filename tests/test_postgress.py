@@ -1,5 +1,4 @@
 import json
-import pytest
 import os
 import secrets
 from app.pg_helper import PGHandler
