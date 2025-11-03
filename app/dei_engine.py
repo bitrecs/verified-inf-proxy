@@ -51,35 +51,48 @@ class DiversityIncentiveEngine:
         return final, multiplier, proof.model_name
 
     def print_epoch_report(self):
-        print(f"\n{'='*60}")
+        # Calculate max model name length for dynamic alignment
+        max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
+        max_model_len = max(max_model_len, 20)  # Minimum width
+        
+        header = f"{'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus':>8}"
+        separator = "-" * len(header)
+        
+        print(f"\n{'='*len(header)}")
         print(f" EPOCH REPORT: {self.total_verified} Verified Proofs")
-        print(f"{'='*60}")
-        print(f"{'Model':<20} {'Count':>8} {'Rarity':>10} {'Bonus':>8}")
-        print("-" * 60)
+        print(f"{'='*len(header)}")
+        print(header)
+        print(separator)
 
         for model, count in sorted(self.model_count.items(), key=lambda x: -x[1]):
             vmrs = 1.0 / count
             bonus = min(1.0 + self.beta * vmrs, self.max_multiplier)
             rarity = f"1/{count}"
-            print(f"{model:<20} {count:>8} {rarity:>10} {bonus:>7.3f}x")
+            print(f"{model:<{max_model_len}} {count:>8} {rarity:>10} {bonus:>7.3f}x")
 
         print(f"\nTop unique models get up to {self.max_multiplier:.1f}x reward!\n")
 
     def generate_epoch_report(self) -> str:
+        # Same logic for string version
+        max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
+        max_model_len = max(max_model_len, 20)
+        
+        header = f"{'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus':>8}"
+        separator = "-" * len(header)
+        
         report_lines = []
-        report_lines.append(f"\n{'='*60}")
+        report_lines.append(f"\n{'='*len(header)}")
         report_lines.append(f" EPOCH REPORT: {self.total_verified} Verified Proofs")
-        report_lines.append(f"{'='*60}")
-        report_lines.append(f"{'Model':<20} {'Count':>8} {'Rarity':>10} {'Bonus':>8}")
-        report_lines.append("-" * 60)
+        report_lines.append(f"{'='*len(header)}")
+        report_lines.append(header)
+        report_lines.append(separator)
 
         for model, count in sorted(self.model_count.items(), key=lambda x: -x[1]):
             vmrs = 1.0 / count
             bonus = min(1.0 + self.beta * vmrs, self.max_multiplier)
             rarity = f"1/{count}"
-            report_lines.append(f"{model:<20} {count:>8} {rarity:>10} {bonus:>7.3f}x")
+            report_lines.append(f"{model:<{max_model_len}} {count:>8} {rarity:>10} {bonus:>7.3f}x")
 
-        #report_lines.append(f"\nTop unique models get up to {self.max_multiplier:.1f}x reward!\n")
         return "\n".join(report_lines)
 
 
