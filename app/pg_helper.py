@@ -32,7 +32,7 @@ class PGHandler:
         try:
             conn = self.connect()
             with conn.cursor() as cur:
-                sql = f"SELECT * FROM {TABLE_NAME} ORDER BY timestamp DESC LIMIT {limit}"
+                sql = f"SELECT * FROM {TABLE_NAME} ORDER BY created_at DESC LIMIT {limit}"
                 cur.execute(sql)
                 rows = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
@@ -52,7 +52,7 @@ class PGHandler:
         try:
             conn = self.connect()
             with conn.cursor() as cur:
-                sql = f"SELECT * FROM {TABLE_NAME} WHERE hotkey = %s ORDER BY timestamp DESC LIMIT {limit}"
+                sql = f"SELECT * FROM {TABLE_NAME} WHERE hotkey = %s ORDER BY created_at DESC LIMIT {limit}"
                 cur.execute(sql, (hotkey,))
                 row = cur.fetchone()
                 if row:
@@ -126,7 +126,7 @@ class PGHandler:
                     logger.error("JSON data too large")
                     return False
                 
-                if 1==1:
+                if BT_NETUID == "296":
                     sql = """
                     INSERT INTO vi.signed_responses (
                         unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response
@@ -134,7 +134,7 @@ class PGHandler:
                     """
                 else:
                     sql = """
-                    INSERT INTO vi.signed_responses (
+                    INSERT INTO vi.signed_responses_mainnet (
                         unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """

@@ -11,19 +11,23 @@ import asyncio
 import logging
 import threading
 import tracemalloc
-from dotenv import load_dotenv
-
-from app.dei_engine import DiversityIncentiveEngine
-from app.pg_helper import PGHandler
 load_dotenv()
+from dotenv import load_dotenv
+from cachetools import TTLCache
+from typing import Union, Dict
+from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
 from app.html_stats import HTMLStats
 from app.llm_providers import LLMProvider, LLMProviderStats
-from app.utils import is_valid_hotkey, load_version_info, verify_miner_request, verify_time
+from app.dei_engine import DiversityIncentiveEngine
+from app.utils import (
+    is_valid_hotkey, load_version_info, 
+    verify_miner_request, verify_time
+)
+from slowapi import Limiter
+from slowapi.middleware import SlowAPIMiddleware
 from app.metagraph_sync_manager import MetagraphSyncManager
 from app.models import ChatCompletionRequest, SignedResponse
-from cachetools import TTLCache
-from typing import Union, Dict
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -31,21 +35,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Header, HTTPException
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from slowapi import Limiter
-from slowapi.middleware import SlowAPIMiddleware
 
-def get_platform():
-    if os.environ.get('GOOGLE_CLOUD_PROJECT') and os.environ.get('K_SERVICE'):
-        return 'gcp'
-    elif os.environ.get('DO_APP_ID'):
-        return 'do'
-    else:
-        return 'unknown'
-
-log_level = logging.INFO
-if get_platform() == 'gcp':   
-    log_level = logging.DEBUG
-    
+log_level = logging.INFO    
 logging.basicConfig(
     level=log_level,
     format='%(asctime)s | %(levelname)s | %(name)s:%(lineno)d - %(message)s',
@@ -81,7 +72,6 @@ client = httpx.AsyncClient(
         keepalive_expiry=15.0
     )
 )
-
 
 metagraph_manager = MetagraphSyncManager(
     network=BT_NETWORK,
@@ -156,8 +146,7 @@ def save_request_data(
     completion_request: ChatCompletionRequest
 ) -> bool:
     """Background function to insert all request-related data into postgress"""
-    try:       
-
+    try:
         pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
         result = pg_handler.insert_signed_response(
             unique_id=request_id,
@@ -188,8 +177,7 @@ async def lifespan(app: FastAPI):
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0    
-    app.state.dei_engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)
-    # Start the metagraph manager
+    app.state.dei_engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)    
     metagraph_manager.start()
     
     # Background task to restart manager if dead
@@ -220,9 +208,8 @@ async def lifespan(app: FastAPI):
             await app.state.restart_task
             await app.state.refresh_task
         except asyncio.CancelledError:
-            pass
+            pass        
         
-        # Stop metagraph manager
         metagraph_manager.stop()
         await client.aclose()
         logger.info("Shutting down PG writer thread pool...")
@@ -243,6 +230,7 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -335,14 +323,12 @@ async def verified_logpg(request: Request):
     if cache_key in MINER_LOG_CACHE:
         html_content = MINER_LOG_CACHE[cache_key]
         return HTMLResponse(content=html_content)
-    else:
-        
+    else:        
         DATABASE_URL = os.environ.get("DATABASE_URL", "")
         if not DATABASE_URL:
             return HTMLResponse(content="<pre>no db</pre>")
         handler = PGHandler(DATABASE_URL)
         verified = handler.select_signed_responses(limit=500)
-
         html_content = HTMLLog.render_verified_display(
             verified=verified,
             bt_network=BT_NETWORK,
@@ -445,21 +431,29 @@ async def is_verified(request: Request, hotkey: str):
         #logger.info(f"Latest response timestamp: {timestamp_str}, model: {model}, provider: {provider}")
         if not timestamp_str:
             result = {"verified": False, "hotkey": hotkey, "message": "No timestamp in latest response"}
-        else:
-            try:
-                timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-            except ValueError:
-                result = {"verified": False, "message": "Invalid timestamp format"}
-            else:
-                age_seconds = (datetime.now(timezone.utc) - timestamp).total_seconds()
-                if age_seconds > IS_VERIFIED_HOUR_DELTA * 3600:
-                    result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {IS_VERIFIED_HOUR_DELTA} hours"}
-                else:
-                    total_responses = len(latest)
-                    result = {"verified": True, "hotkey": hotkey, "message": f"Hotkey has {total_responses} verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)", "latest_timestamp": timestamp_str, "latest_model": model, "latest_provider": provider}
+            return JSONResponse(status_code=200, content=result)        
+
+        try:
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except ValueError:
+            result = {"verified": False, "message": "Invalid timestamp format"}
+            return JSONResponse(status_code=200, content=result)
+
+        age_seconds = (datetime.now(timezone.utc) - timestamp).total_seconds()
+        if age_seconds > IS_VERIFIED_HOUR_DELTA * 3600:
+            result = {"verified": False, "hotkey": hotkey, "message": f"Latest response is older than {IS_VERIFIED_HOUR_DELTA} hours"}
+        else:                    
+            result = {
+                "verified": True,
+                "hotkey": hotkey,
+                "message": f"Hotkey has {len(latest)} verified response (since {IS_VERIFIED_HOUR_DELTA} hours ago)",
+                "latest_timestamp": timestamp_str,
+                "latest_model": model,
+                "latest_provider": provider
+            }
     
     IS_VERIFIED_CACHE[hotkey] = result
-    logger.info(f"\033[32mCached result for hotkey {hotkey}: {result['verified']}\033[0m")
+    logger.info(f"\033[32mIs Verified cached result {hotkey}: {result['verified']}\033[0m")
     return JSONResponse(status_code=200, content=result)
 
 

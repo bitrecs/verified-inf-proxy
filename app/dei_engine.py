@@ -19,8 +19,7 @@ class DiversityIncentiveEngine:
         self.model_count: Dict[str, int] = defaultdict(int)
         self.total_verified = 0
 
-    def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
-        """Submit a cryptographically verified proof"""
+    def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):        
         proof = Proof(
             miner_id=miner_id,
             model_name=model_name,
