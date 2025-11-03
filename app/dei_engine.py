@@ -55,7 +55,7 @@ class DiversityIncentiveEngine:
         self.proofs = []
         self.model_count = defaultdict(int)
         self.total_verified = 0
-        records = pg_handler.select_signed_responses_formix_since(since_date, limit=10_000)
+        records = pg_handler.select_signed_responses_formix_since(since_date, limit=100_000)
         for record in records:
             miner_id = record.get("hotkey", "")
             model_name = record.get("model", "unknown")           
