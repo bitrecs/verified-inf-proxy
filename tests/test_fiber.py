@@ -5,18 +5,6 @@ from fiber.chain.fetch_nodes import get_nodes_for_netuid
 
 logger = get_logger(__name__)
 
-# def test_fiber():
-#     st = time.perf_counter()
-#     substrate = interface.get_substrate(subtensor_network="test")    
-#     mg = metagraph.Metagraph(substrate=substrate, netuid=296)
-#     mg.sync_nodes()
-#     logger.info(f"Found nodes: {mg.nodes}")
-#     for node in mg.nodes:
-#         logger.info(f"Node {node} has ip {node.ip} and port {node.port} and stake {node.stake}")
-#     et = time.perf_counter()
-#     logger.info(f"Fetched nodes in {et-st} seconds")
-#     assert len(mg.nodes) > 50   
-
 
 def test_fiber2():
     substrate = interface.get_substrate(subtensor_network="test")        

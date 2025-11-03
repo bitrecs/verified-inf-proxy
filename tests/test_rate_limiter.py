@@ -2,7 +2,6 @@ import os
 import httpx
 import time
 import pytest
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Tuple
 from dotenv import load_dotenv
 load_dotenv()

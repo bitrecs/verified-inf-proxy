@@ -1,17 +1,9 @@
 import os
-import httpx
-import json
-import base64
 import pytest
-from typing import Dict, Any
 from dotenv import load_dotenv
-from tests.utils import call_proxy_server_with_signing, get_public_key, sign_verified_request, verify_signature
+from tests.utils import call_proxy_server_with_signing, get_public_key, verify_proof
 load_dotenv()
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fiber.chain import chain_utils
-from fiber import (
-    Keypair
-)
 
 BASE_URL = "http://localhost:8000"
 #BASE_URL = "https://verified.bitrecs.ai"
@@ -38,6 +30,6 @@ async def test_verify_signature_with_signing():
     response = await call_proxy_server_with_signing(BASE_URL, request, miner_keypair.ss58_address, miner_keypair, "OPEN_ROUTER", OPENROUTER_KEY)
     print(f"Response: {response}")
 
-    assert verify_signature(response, public_key), "Signature verification failed"
+    assert verify_proof(response, public_key), "Signature verification failed"
 
 

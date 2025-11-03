@@ -1,7 +1,12 @@
+import os
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+from app.pg_helper import PGHandler
+from dotenv import load_dotenv
+load_dotenv()
+
 
 @dataclass
 class Proof:
@@ -49,6 +54,17 @@ class DiversityIncentiveEngine:
         multiplier = self.get_rarity_bonus(proof.model_name)
         final = proof.base_reward * multiplier
         return final, multiplier, proof.model_name
+    
+
+    def load_proofs_from_db(self, since_date: datetime):        
+        pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
+        records = pg_handler.select_signed_responses_since(since_date, limit=10_000)
+        for record in records:
+            miner_id = record.get("hotkey", "")
+            model_name = record.get("model", "unknown")           
+            self.submit_proof(miner_id, model_name)
+
+        
 
     def print_epoch_report(self):
         # Calculate max model name length for dynamic alignment

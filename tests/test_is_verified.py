@@ -1,12 +1,8 @@
 import os
 import httpx
-import json
-import base64
 import pytest
-from typing import Dict, Any
 from dotenv import load_dotenv
 load_dotenv()
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 BASE_URL = "http://localhost:8000"
 #BASE_URL = "https://verified.bitrecs.ai"
