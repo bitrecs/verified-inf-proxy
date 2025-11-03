@@ -52,8 +52,8 @@ class PGHandler:
         try:
             conn = self.connect()
             with conn.cursor() as cur:
-                sql = f"SELECT * FROM {TABLE_NAME} WHERE hotkey = %s ORDER BY created_at DESC LIMIT {limit}"
-                cur.execute(sql, (hotkey,))
+                sql = f"SELECT * FROM {TABLE_NAME} WHERE hotkey = %s ORDER BY created_at DESC LIMIT %s"
+                cur.execute(sql, (hotkey, limit))
                 row = cur.fetchone()
                 if row:
                     columns = [desc[0] for desc in cur.description]
@@ -79,9 +79,9 @@ class PGHandler:
                 sql = f"""
                 SELECT * FROM {TABLE_NAME} 
                 WHERE hotkey = %s AND created_at >= %s 
-                ORDER BY created_at DESC LIMIT {limit}
+                ORDER BY created_at DESC LIMIT %s
                 """
-                cur.execute(sql, (hotkey, since_date))
+                cur.execute(sql, (hotkey, since_date, limit))
                 rows = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
                 for row in rows:
