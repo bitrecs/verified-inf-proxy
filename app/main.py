@@ -11,8 +11,9 @@ import asyncio
 import logging
 import threading
 import tracemalloc
-load_dotenv()
 from dotenv import load_dotenv
+load_dotenv()
+
 from cachetools import TTLCache
 from typing import Union, Dict
 from app.pg_helper import PGHandler
@@ -472,7 +473,8 @@ async def forward_proxy_request(
 ) -> SignedResponse:
     
     client_ip = get_client_ip(request)    
-    request_id = str(uuid.uuid4())
+    #request_id = str(uuid.uuid4())
+    request_id = secrets.token_hex(16)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
 
