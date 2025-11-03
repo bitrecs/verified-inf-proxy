@@ -52,6 +52,7 @@ IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for is_verified
 MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
 MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=1800) # 30 minutes
+MODEL_MIX_CACHE = TTLCache(maxsize=10, ttl=300) # 5 minutes
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
@@ -390,11 +391,18 @@ async def model_mix(request: Request):
     request_ip = get_client_ip(request)
     logger.info(f"mix endpoint accessed from IP {request_ip}")
     try:
+        cache_key = "model_mix_report_html"
+        if cache_key in MODEL_MIX_CACHE:
+            logger.info(f"mix endpoint accessed from IP {request_ip} - using cached data")
+            report = MODEL_MIX_CACHE[cache_key]
+            return HTMLResponse(content=report)
+        
         since_date = datetime.now(timezone.utc) - timedelta(days=7)
         app.state.dei_engine.load_proofs_from_db(since_date)
         report = app.state.dei_engine.generate_epoch_report()
         final = f"<h4>Diversity Incentive Engine - Model Mix (Last 7 Days)</h4>\n"
         final += f"<pre>{report}</pre>\n"
+        MODEL_MIX_CACHE[cache_key] = final
         return HTMLResponse(content=final)
     except Exception as e:
         logger.error(f"Error generating model mix report: {e}")
