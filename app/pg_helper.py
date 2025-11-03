@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import traceback
 import psycopg
 from datetime import datetime, timezone
 from typing import Any, Dict, List
