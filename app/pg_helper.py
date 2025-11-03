@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import psycopg
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List
 from dotenv import load_dotenv
 load_dotenv()
