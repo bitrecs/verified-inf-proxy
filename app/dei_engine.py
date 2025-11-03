@@ -1,14 +1,13 @@
+import os
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+from app.models import Proof
+from app.pg_helper import PGHandler
+from dotenv import load_dotenv
+load_dotenv()
 
-@dataclass
-class Proof:
-    miner_id: str
-    model_name: str
-    base_reward: float
-    timestamp: float
 
 class DiversityIncentiveEngine:
     def __init__(self, beta: float = 1.0, max_multiplier: float = 3.0):
@@ -49,28 +48,24 @@ class DiversityIncentiveEngine:
         multiplier = self.get_rarity_bonus(proof.model_name)
         final = proof.base_reward * multiplier
         return final, multiplier, proof.model_name
+    
+
+    def load_proofs_from_db(self, since_date: datetime):        
+        pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
+        self.proofs = []
+        self.model_count = defaultdict(int)
+        self.total_verified = 0
+        records = pg_handler.select_signed_responses_since(since_date, limit=10_000)
+        for record in records:
+            miner_id = record.get("hotkey", "")
+            model_name = record.get("model", "unknown")           
+            self.submit_proof(miner_id, model_name)
+        
 
     def print_epoch_report(self):
-        # Calculate max model name length for dynamic alignment
-        max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
-        max_model_len = max(max_model_len, 20)  # Minimum width
+        report = self.generate_epoch_report()
+        print(report)
         
-        header = f"{'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus':>8}"
-        separator = "-" * len(header)
-        
-        print(f"\n{'='*len(header)}")
-        print(f" EPOCH REPORT: {self.total_verified} Verified Proofs")
-        print(f"{'='*len(header)}")
-        print(header)
-        print(separator)
-
-        for model, count in sorted(self.model_count.items(), key=lambda x: -x[1]):
-            vmrs = 1.0 / count
-            bonus = min(1.0 + self.beta * vmrs, self.max_multiplier)
-            rarity = f"1/{count}"
-            print(f"{model:<{max_model_len}} {count:>8} {rarity:>10} {bonus:>7.3f}x")
-
-        print(f"\nTop unique models get up to {self.max_multiplier:.1f}x reward!\n")
 
     def generate_epoch_report(self) -> str:
         # Same logic for string version

@@ -173,7 +173,7 @@ class HTMLStats:
             }}
             .hotkey {{
                 font-family: 'Courier New', monospace;
-                font-size: 12px;
+                font-size: 14px;
                 color: #79c0ff;
                 word-break: break-all;
                 max-width: 150px;
@@ -319,7 +319,7 @@ class HTMLStats:
                 
                 .hotkey, .signature {{
                     max-width: 100%;
-                    font-size: 11px;
+                    font-size: 14px;
                 }}
                 
                 .response {{

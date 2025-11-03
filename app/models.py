@@ -1,7 +1,7 @@
-import hashlib
 import json
+import hashlib
 from pydantic import BaseModel, ConfigDict
-
+from dataclasses import dataclass
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -37,3 +37,13 @@ class SignedResponse(BaseModel):
         thing = self.model_dump()
         encoded = json.dumps(thing, sort_keys=True).encode('utf-8')
         return hashlib.sha256(encoded).hexdigest()
+
+
+
+
+@dataclass
+class Proof:
+    miner_id: str
+    model_name: str
+    base_reward: float
+    timestamp: float

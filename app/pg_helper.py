@@ -1,6 +1,6 @@
+import os
 import json
 import logging
-import os
 import psycopg
 from datetime import datetime
 from typing import Any, Dict, List
@@ -39,6 +39,27 @@ class PGHandler:
                     result = dict(zip(columns, row))
                     results.append(result)
                 logger.debug(f"Selected {len(results)} signed responses")
+        except Exception as e:
+            logger.error(f"Select failed: {e}")
+        finally:
+            if conn:
+                conn.close()
+        return results
+    
+    def select_signed_responses_since(self, since_date: datetime, limit=100) -> List[Dict[str, Any]]:
+        """Select signed responses from the database since a given date."""
+        results = []
+        try:
+            conn = self.connect()
+            with conn.cursor() as cur:
+                sql = f"SELECT * FROM {TABLE_NAME} WHERE created_at >= %s ORDER BY created_at DESC LIMIT %s"
+                cur.execute(sql, (since_date, limit))
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                for row in rows:
+                    result = dict(zip(columns, row))
+                    results.append(result)
+                logger.debug(f"Selected {len(results)} signed responses since {since_date}")
         except Exception as e:
             logger.error(f"Select failed: {e}")
         finally:
@@ -166,3 +187,7 @@ class PGHandler:
         finally:
             if conn:
                 conn.close()
+
+
+
+      
