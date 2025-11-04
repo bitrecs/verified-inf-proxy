@@ -16,6 +16,7 @@ class LLMProvider(Enum):
     CEREBRAS = 9
     GROQ = 10
     NVIDIA = 11
+    PERPLEXITY = 12
 
     @staticmethod
     def from_str(value: str) -> 'LLMProvider':
@@ -41,7 +42,9 @@ class LLMProvider(Enum):
             case "GROQ":
                 return LLMProvider.GROQ
             case "NVIDIA":
-                return LLMProvider.NVIDIA        
+                return LLMProvider.NVIDIA
+            case "PERPLEXITY":
+                return LLMProvider.PERPLEXITY        
             case _:
                 raise ValueError("Unknown LLMPRovider server")
         
@@ -92,6 +95,8 @@ class LLMProviderStats:
                 return "api.groq.com"
             case LLMProvider.NVIDIA:
                 return "integrate.api.nvidia.com"
+            case LLMProvider.PERPLEXITY:
+                return "api.perplexity.ai"
             case _:
                 raise ValueError("Unknown LLMProvider server")  
             
@@ -120,6 +125,8 @@ class LLMProviderStats:
                 return 443
             case LLMProvider.NVIDIA:
                 return 443  # Fix for NVIDIA
+            case LLMProvider.PERPLEXITY:
+                return 443
             case _:
                 return 80  # Default fallback
 
