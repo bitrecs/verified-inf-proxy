@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI):
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0
-    app.state.dei_engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=2.0)
+    app.state.dei_engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=2.0)
     metagraph_manager.start()
     
     # Background task to restart manager if dead
