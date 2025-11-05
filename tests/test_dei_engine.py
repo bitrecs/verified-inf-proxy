@@ -11,7 +11,7 @@ def test_load_defaults():
 
 def test_load_from_db():
     engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)
-    since_date = datetime.now(timezone.utc) - timedelta(days=7)
+    since_date = datetime.now(timezone.utc) - timedelta(days=14)
     engine.load_proofs_from_db(since_date)
     assert engine.total_verified >= 0
 

@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI):
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0    
-    app.state.dei_engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)    
+    app.state.dei_engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)
     metagraph_manager.start()
     
     # Background task to restart manager if dead
@@ -400,7 +400,8 @@ async def model_mix(request: Request):
         since_date = datetime.now(timezone.utc) - timedelta(days=7)
         app.state.dei_engine.load_proofs_from_db(since_date)
         report = app.state.dei_engine.generate_epoch_report()
-        final = f"<h4>Diversity Incentive Engine - Model Mix (Last 7 Days)</h4>\n"
+        final = f"<h4>Model Mix - Diversity Incentive Engine (Last 7 Days)</h4>\n"
+        final += f"<p>Network: {BT_NETWORK} - Netuid: {BT_NETUID}</p>\n"
         final += f"<pre>{report}</pre>\n"
         MODEL_MIX_CACHE[cache_key] = final
         return HTMLResponse(content=final)
@@ -566,6 +567,8 @@ async def forward_proxy_request(
                 url = "https://api.anthropic.com/v1/chat/completions"
             case LLMProvider.NVIDIA:
                 url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            case LLMProvider.PERPLEXITY:                
+                url = "https://api.perplexity.ai/chat/completions"
             case _:
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
