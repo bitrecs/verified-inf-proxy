@@ -19,15 +19,18 @@ class DiversityIncentiveEngine:
         self.model_count: Dict[str, int] = defaultdict(int)
         self.total_verified = 0
 
-    def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):        
+    def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
+        # Normalize model name: remove provider prefix (e.g., "google/" -> "gemini-2.0-flash-001")
+        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
+        
         proof = Proof(
             miner_id=miner_id,
-            model_name=model_name,
+            model_name=normalized_model,  # Use normalized name
             base_reward=base_reward,
             timestamp=datetime.now().timestamp()
         )
         self.proofs.append(proof)
-        self.model_count[model_name] += 1
+        self.model_count[normalized_model] += 1  # Count normalized
         self.total_verified += 1
     
     def load_proofs_from_db(self, since_date: datetime):        
