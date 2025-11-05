@@ -18,6 +18,7 @@ class DiversityIncentiveEngine:
         self.proofs: List[Proof] = []
         self.model_count: Dict[str, int] = defaultdict(int)
         self.total_verified = 0
+        self.exponent = 1.0  # Exponent for rarity scaling
 
     def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
         if not miner_id or not model_name:
@@ -73,9 +74,8 @@ class DiversityIncentiveEngine:
             return 1.0
         vmrs = 1.0 / count
         max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
-        normalized_vmrs = vmrs / max_vmrs  # 0 to 1 scale
-        #bonus = 1.0 + self.beta * normalized_vmrs
-        bonus = 1.0 + self.beta * (normalized_vmrs ** 2)  # Exponential scaling
+        normalized_vmrs = vmrs / max_vmrs  # 0 to 1 scale        
+        bonus = 1.0 + self.beta * (normalized_vmrs ** self.exponent)  # Exponential scaling
         return min(bonus, self.max_multiplier)
 
     # def get_rarity_bonus(self, model_name: str) -> float:
@@ -112,6 +112,7 @@ class DiversityIncentiveEngine:
         report_lines = []
         report_lines.append(f"\n{'='*len(header)}")
         report_lines.append(f" EPOCH REPORT: {self.total_verified} Verified Proofs")
+        report_lines.append(f"Parameters: Beta={self.beta}, Exponent={self.exponent}, Max Multiplier={self.max_multiplier}")
         report_lines.append(f"{'='*len(header)}")
         report_lines.append(header)
         report_lines.append(separator)
