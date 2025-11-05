@@ -381,53 +381,26 @@ async def provider_log(request: Request):
     return HTMLResponse(content="<pre>Cache Empty</pre>")
 
 
-# @app.get("/mix")
-# @limiter.limit("60/minute")
-# async def model_mix(request: Request):
-#     request_ip = get_client_ip(request)
-#     logger.info(f"mix endpoint accessed from IP {request_ip}")
-#     try:
-#         cache_key = "model_mix_report_html"
-#         if cache_key in MODEL_MIX_CACHE:
-#             logger.info(f"mix endpoint accessed from IP {request_ip} - using cached data")
-#             report = MODEL_MIX_CACHE[cache_key]
-#             return HTMLResponse(content=report)
-        
-#         since_date = datetime.now(timezone.utc) - timedelta(days=7)
-#         app.state.dei_engine.load_proofs_from_db(since_date)
-#         report = app.state.dei_engine.generate_epoch_report()
-#         report = app.state.dei_engine.generate_epoch_report_json()
-#         final = f"<h4>Model Mix - Diversity Incentive Engine (Last 7 Days)</h4>\n"
-#         final += f"<p>Network: {BT_NETWORK} - Netuid: {BT_NETUID}</p>\n"
-#         final += f"<pre>{report}</pre>\n"
-#         MODEL_MIX_CACHE[cache_key] = final
-#         return HTMLResponse(content=final)
-#     except Exception as e:
-#         logger.error(f"Error generating model mix report: {e}")
-#         return HTMLResponse(content="<pre>Error generating report</pre>")
-    
-
 @app.get("/rarity")
-@limiter.limit("60/minute")
+@limiter.limit("120/minute")
 async def model_rarity(request: Request):
     request_ip = get_client_ip(request)
-    logger.info(f"mix endpoint accessed from IP {request_ip}")
+    logger.info(f"Rarity endpoint accessed from IP {request_ip}")
     try:
         cache_key = "model_rarity_report_json"
         if cache_key in MODEL_MIX_CACHE:
-            logger.info(f"rarity endpoint accessed from IP {request_ip} - using cached data")
+            logger.info(f"Rarity endpoint accessed from IP {request_ip} - using cached data")
             report = MODEL_MIX_CACHE[cache_key]
             return JSONResponse(content=report)
         
         since_date = datetime.now(timezone.utc) - timedelta(days=7)
-        app.state.dei_engine.load_proofs_from_db(since_date)        
+        app.state.dei_engine.load_proofs_from_db(since_date)
         report = app.state.dei_engine.generate_rarity_report_json()
-       
         MODEL_MIX_CACHE[cache_key] = report
         return JSONResponse(content=report)
     except Exception as e:
-        logger.error(f"Error generating model mix report: {e}")
-        return JSONResponse(content={"error": "Error generating report"})
+        logger.error(f"Error generating rarity report: {e}")
+        return JSONResponse(content={"error": "Error generating rarity report"})
 
 
 
