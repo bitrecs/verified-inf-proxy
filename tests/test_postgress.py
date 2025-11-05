@@ -47,7 +47,7 @@ def test_insert_signed_response():
     handler = PGHandler(TEST_DB_URL)
 
     result = handler.insert_signed_response(
-        unique_id=unique_id,
+        request_id=unique_id,
         response=signed_response,       
         duration=1.23,
         provider="test_provider",

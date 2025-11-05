@@ -259,5 +259,3 @@ if __name__ == "__main__":
     # Generate JSON report
     json_report = engine.generate_rarity_report_json()
     print(json.dumps(json_report, indent=2))  # Pretty-print for testing
-    
-    # Or save to file: with open('epoch_report.json', 'w') as f: json.dump(json_report, f)

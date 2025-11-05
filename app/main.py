@@ -135,7 +135,6 @@ async def refresh_provider_pings():
             logger.error(f"Error refreshing provider pings: {e}")
         await asyncio.sleep(1800)  # Refresh every 30 minutes
 
-
 def save_request_data(
     signed_response: SignedResponse,
     request_id: str,
@@ -143,24 +142,30 @@ def save_request_data(
     provider: str,
     x_nonce: str,
     x_hotkey: str,
-    completion_request: ChatCompletionRequest
+    completion_request: ChatCompletionRequest,
+    prompt_tokens: int = 0,  # New
+    completion_tokens: int = 0,  # New
+    total_tokens: int = 0  # New
 ) -> bool:
-    """Background function to insert all request-related data into postgress"""
     try:
         pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
         result = pg_handler.insert_signed_response(
-            unique_id=request_id,
             response=signed_response,
+            request_id=request_id,
             duration=duration,
             provider=provider,
             x_nonce=x_nonce,
             x_hotkey=x_hotkey,
-            completion_request=completion_request
+            completion_request=completion_request,
+            prompt_tokens=prompt_tokens,  # New
+            completion_tokens=completion_tokens,  # New
+            total_tokens=total_tokens  # New
         )
         return result        
     except Exception as e:
         logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
         app.state.exceptions += 1
+        return False
 
 
 
@@ -611,6 +616,18 @@ async def forward_proxy_request(
         et = time.perf_counter()
         duration = et - st
 
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+        try:
+            response_data = response.json()
+            usage = response_data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+        except Exception as e:
+            logger.warning(f"Could not extract token usage for request {request_id}: {str(e)}")
+
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
             app.state.thread_pool,
@@ -621,13 +638,11 @@ async def forward_proxy_request(
             str(provider),
             x_nonce,
             x_hotkey,
-            completion_request
-        )
-
-        # try:
-        #     app.state.dei_engine.submit_proof(x_hotkey, completion_request.model)
-        # except Exception as e:
-        #     logger.error(f"DEI engine not initialized for request {request_id}: {str(e)}")
+            completion_request,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens
+        )      
 
         app.state.total_requests += 1
         logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")
