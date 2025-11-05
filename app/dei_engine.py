@@ -75,7 +75,7 @@ class DiversityIncentiveEngine:
         max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
         normalized_vmrs = vmrs / max_vmrs  # 0 to 1 scale
         #bonus = 1.0 + self.beta * normalized_vmrs
-        bonus = 1.0 + self.beta * (normalized_vmrs ** 3)  # Exponential scaling
+        bonus = 1.0 + self.beta * (normalized_vmrs ** 2)  # Exponential scaling
         return min(bonus, self.max_multiplier)
 
     # def get_rarity_bonus(self, model_name: str) -> float:
