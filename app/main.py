@@ -2,7 +2,6 @@ import os
 import gc
 import time
 import json
-import uuid
 import secrets
 import hashlib
 import base64
@@ -13,7 +12,6 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
-
 from cachetools import TTLCache
 from typing import Union, Dict
 from app.pg_helper import PGHandler
@@ -226,7 +224,7 @@ app_version = version_info if version_info else "0.8.8"
 app = FastAPI(
     title=f"Bitrecs Verified Inference (Netuid: {BT_NETWORK} - Network: {BT_NETUID})",
     version=app_version,
-    description="Proxy for verified inference with Bittensor integration, providing trusted LLM completions.",
+    description="Verified Inference proxy with Bittensor integration, providing trusted LLM completions.",
     debug=False,
     lifespan=lifespan    
 )
@@ -365,9 +363,7 @@ async def verified_statspg(request: Request):
         )
         MINER_STATS_CACHE[cache_key] = html_content
         logger.info("Updated verified_stats cache from pg")
-        return HTMLResponse(content=html_content)
-        
-   
+        return HTMLResponse(content=html_content)    
 
 
 @app.get("/providers")
@@ -481,8 +477,7 @@ async def forward_proxy_request(
     x_timestamp: str = Header()
 ) -> SignedResponse:
     
-    client_ip = get_client_ip(request)    
-    #request_id = str(uuid.uuid4())
+    client_ip = get_client_ip(request)
     request_id = secrets.token_hex(16)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
@@ -530,7 +525,7 @@ async def forward_proxy_request(
             else:
                 REQUEST_HASH_HISTORY[miner_request_key] = True
 
-        if 1==2:
+        if 1==1:
             if x_nonce in NONCE_HISTORY:
                 logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
                 raise HTTPException(400, "Replay attack detected: Nonce has already been used")
@@ -590,7 +585,7 @@ async def forward_proxy_request(
         
         request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
         response_hash = hashlib.sha256(response.content).hexdigest()
-        nonce = secrets.token_bytes(16)
+        #nonce = secrets.token_bytes(16)
         proof = {
             "request_hash": request_hash,
             "response_hash": response_hash,
