@@ -12,7 +12,7 @@ load_dotenv()
 
 
 class DiversityIncentiveEngine:
-    def __init__(self, beta: float = 1.0, max_multiplier: float = 3.0):
+    def __init__(self, beta: float = 1.0, max_multiplier: float = 2.0):
         self.beta = beta #more reward for rarity
         self.max_multiplier = max_multiplier #cap on reward multiplier
         self.proofs: List[Proof] = []
@@ -20,9 +20,11 @@ class DiversityIncentiveEngine:
         self.total_verified = 0
 
     def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
-        # Normalize model name: remove provider prefix (e.g., "google/" -> "gemini-2.0-flash-001")
-        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
+        if not miner_id or not model_name:
+            return
         
+        # Normalize model name: remove provider prefix (e.g., "google/" -> "gemini-2.0-flash-001")
+        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name        
         proof = Proof(
             miner_id=miner_id,
             model_name=normalized_model,  # Use normalized name
@@ -54,13 +56,26 @@ class DiversityIncentiveEngine:
     #     return min(bonus, self.max_multiplier)
 
     
+    # def get_rarity_bonus(self, model_name: str) -> float:
+    #     """Exponential VMRS for stronger rarity rewards."""        
+    #     count = self.model_count[model_name]
+    #     if count == 0:
+    #         return 1.0
+    #     vmrs = 1.0 / count
+    #     bonus = 1.0 + self.beta * (vmrs ** 2)  #adjust exponent
+    #     return min(bonus, self.max_multiplier)
+
+    
     def get_rarity_bonus(self, model_name: str) -> float:
-        """Exponential VMRS for stronger rarity rewards."""        
+        """Normalized VMRS relative to the rarest model."""
         count = self.model_count[model_name]
-        if count == 0:
+        if count == 0 or not self.model_count:
             return 1.0
         vmrs = 1.0 / count
-        bonus = 1.0 + self.beta * (vmrs ** 2)  #adjust exponent
+        max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
+        normalized_vmrs = vmrs / max_vmrs  # 0 to 1 scale
+        #bonus = 1.0 + self.beta * normalized_vmrs
+        bonus = 1.0 + self.beta * (normalized_vmrs ** 3)  # Exponential scaling
         return min(bonus, self.max_multiplier)
 
     # def get_rarity_bonus(self, model_name: str) -> float:
@@ -71,19 +86,8 @@ class DiversityIncentiveEngine:
     #     vmrs = 1.0 / count
     #     import math
     #     bonus = 1.0 + self.beta * math.log(vmrs + 1)  # +1 to avoid log(0)
-    #     return min(bonus, self.max_multiplier)
-    
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     """Normalized VMRS relative to the rarest model."""
-    #     count = self.model_count[model_name]
-    #     if count == 0 or not self.model_count:
-    #         return 1.0
-    #     vmrs = 1.0 / count
-    #     max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
-    #     normalized_vmrs = vmrs / max_vmrs  # 0 to 1 scale
-    #     bonus = 1.0 + self.beta * normalized_vmrs
-    #     return min(bonus, self.max_multiplier)
-    
+    #     return min(bonus, self.max_multiplier)    
+  
 
     def compute_payout(self, miner_id: str) -> Tuple[float, float, str]:
         """Return (final_reward, multiplier, model_used)"""
@@ -149,7 +153,7 @@ if __name__ == "__main__":
 # DEMO: Simulate an epoch
 # ==========================
 
-    engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=3.0)    
+    engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=2.0)    
 
     # Simulate 1000+ miners
     miners = {
