@@ -123,7 +123,7 @@ class DiversityIncentiveEngine:
                 "model": model,
                 "count": count,
                 "rarity": rarity,
-                "tier": tier.display_name,
+                "tier": tier.value,  # Changed from tier.display_name
                 "bonus": round(bonus, 8),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
@@ -165,7 +165,6 @@ class DiversityIncentiveEngine:
         max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
         max_model_len = max(max_model_len, 20)
         
-        #header = f"{'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus (simulated)':>8}"
         header = f"{'Tier':<10} {'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus':>8}"
         separator = "-" * len(header)
         
@@ -181,8 +180,8 @@ class DiversityIncentiveEngine:
             tier = self.get_rarity_tier(model)
             bonus = self.get_rarity_bonus(model)
             rarity_str = f"1/{count}"
-            colored_name = f"{tier.color}{model}§r"  # §r resets color
-            report_lines.append(f"{tier.display_name:<10} {colored_name:<{max_model_len}} {count:>8} {rarity_str:>10} {bonus:>7.3f}x")
+            # Removed color codes for cleaner output
+            report_lines.append(f"{tier.value:<10} {model:<{max_model_len}} {count:>8} {rarity_str:>10} {bonus:>7.3f}x")
 
         return "\n".join(report_lines)
     
