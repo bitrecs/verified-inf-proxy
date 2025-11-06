@@ -1,15 +1,31 @@
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from collections import defaultdict
-from typing import Dict, List, Tuple
-from datetime import datetime
-from app.models import Proof
-from app.pg_helper import PGHandler
+import json
 from dotenv import load_dotenv
 load_dotenv()
+from collections import defaultdict
+from typing import Dict, List, Tuple
+from datetime import datetime, timezone
+from app.models import Proof
+from app.pg_helper import PGHandler
 
+"""
+Diversity Incentive Engine (DIE)
+----------------------------
+Implements a diversity incentive mechanism to reward miners using rare AI models.
+The incentive is based on the Verified Model Rarity Score (VMRS), which inversely correlates
+with the frequency of model usage among verified proofs.
 
+Model names are normalized by stripping any path/provider prefixes.
+
+params: 
+- beta: scaling factor for rarity bonus
+- max_multiplier: cap on the maximum reward multiplier
+- exponent: controls the steepness of rarity scaling
+- active_date_range: time window for considering proofs
+
+"""
 
 class DiversityIncentiveEngine:
     def __init__(self, beta: float = 1.0, max_multiplier: float = 2.0):
@@ -19,21 +35,21 @@ class DiversityIncentiveEngine:
         self.model_count: Dict[str, int] = defaultdict(int)
         self.total_verified = 0
         self.exponent = 1.0  # Exponent for rarity scaling
+        self.active_date_range = None
 
     def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
         if not miner_id or not model_name:
             return
         
-        # Normalize model name: remove provider prefix (e.g., "google/" -> "gemini-2.0-flash-001")
         normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name        
         proof = Proof(
             miner_id=miner_id,
-            model_name=normalized_model,  # Use normalized name
+            model_name=normalized_model,
             base_reward=base_reward,
             timestamp=datetime.now().timestamp()
         )
         self.proofs.append(proof)
-        self.model_count[normalized_model] += 1  # Count normalized
+        self.model_count[normalized_model] += 1
         self.total_verified += 1
     
     def load_proofs_from_db(self, since_date: datetime):        
@@ -41,32 +57,13 @@ class DiversityIncentiveEngine:
         self.proofs = []
         self.model_count = defaultdict(int)
         self.total_verified = 0
+        self.active_date_range = datetime.now(timezone.utc) - since_date
         records = pg_handler.select_signed_responses_formix_since(since_date, limit=500_000)
         for record in records:
             miner_id = record.get("hotkey", "")
             model_name = record.get("model", "unknown")           
             self.submit_proof(miner_id, model_name)
 
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     """VMRS = 1 / count_of_model"""
-    #     count = self.model_count[model_name]
-    #     if count == 0:
-    #         return 1.0
-    #     vmrs = 1.0 / count
-    #     bonus = 1.0 + self.beta * vmrs
-    #     return min(bonus, self.max_multiplier)
-
-    
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     """Exponential VMRS for stronger rarity rewards."""        
-    #     count = self.model_count[model_name]
-    #     if count == 0:
-    #         return 1.0
-    #     vmrs = 1.0 / count
-    #     bonus = 1.0 + self.beta * (vmrs ** 2)  #adjust exponent
-    #     return min(bonus, self.max_multiplier)
-
-    
     def get_rarity_bonus(self, model_name: str) -> float:
         """Normalized VMRS relative to the rarest model."""
         count = self.model_count[model_name]
@@ -79,6 +76,24 @@ class DiversityIncentiveEngine:
         return min(bonus, self.max_multiplier)
 
     # def get_rarity_bonus(self, model_name: str) -> float:
+    #     """VMRS = 1 / count_of_model"""
+    #     count = self.model_count[model_name]
+    #     if count == 0:
+    #         return 1.0
+    #     vmrs = 1.0 / count
+    #     bonus = 1.0 + self.beta * vmrs
+    #     return min(bonus, self.max_multiplier)
+    
+    # def get_rarity_bonus(self, model_name: str) -> float:
+    #     """Exponential VMRS for stronger rarity rewards."""        
+    #     count = self.model_count[model_name]
+    #     if count == 0:
+    #         return 1.0
+    #     vmrs = 1.0 / count
+    #     bonus = 1.0 + self.beta * (vmrs ** 2)  #adjust exponent
+    #     return min(bonus, self.max_multiplier)
+
+    # def get_rarity_bonus(self, model_name: str) -> float:
     #     """Logarithmic VMRS for diminishing rarity rewards."""        
     #     count = self.model_count[model_name]
     #     if count == 0:
@@ -86,8 +101,42 @@ class DiversityIncentiveEngine:
     #     vmrs = 1.0 / count
     #     import math
     #     bonus = 1.0 + self.beta * math.log(vmrs + 1)  # +1 to avoid log(0)
-    #     return min(bonus, self.max_multiplier)    
-  
+    #     return min(bonus, self.max_multiplier)
+
+    def generate_rarity_report_json(self) -> dict:
+        """Generate epoch report as a JSON-serializable dictionary."""
+        models_list = []
+        for model, count in sorted(self.model_count.items(), key=lambda x: -x[1]):
+            bonus = self.get_rarity_bonus(model)
+            rarity = f"1/{count}"
+            models_list.append({
+                "model": model,
+                "count": count,
+                "rarity": rarity,
+                "bonus": round(bonus, 8),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        
+        days = self.active_date_range.days if self.active_date_range else "N/A"
+        dt_from = (datetime.now(timezone.utc) - self.active_date_range).isoformat() if self.active_date_range else "N/A"
+        report_dict = {
+            "rarity_report": {
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "network": os.environ.get("BT_NETWORK", "test"),
+                "netuid": int(os.environ.get("BT_NETUID", 296)),                
+                "from": dt_from,
+                "to": datetime.now(timezone.utc).isoformat(),
+                "range": f"Last {days} days",
+                "total_verified": self.total_verified,
+                "parameters": {
+                    "beta": self.beta,
+                    "exponent": self.exponent,
+                    "max_multiplier": self.max_multiplier
+                },
+                "models": models_list
+            }
+        }
+        return report_dict
 
     def compute_payout(self, miner_id: str) -> Tuple[float, float, str]:
         """Return (final_reward, multiplier, model_used)"""
@@ -101,8 +150,7 @@ class DiversityIncentiveEngine:
         final = proof.base_reward * multiplier
         return final, multiplier, proof.model_name        
 
-    def generate_epoch_report(self) -> str:
-        # Same logic for string version
+    def generate_epoch_report(self) -> str:        
         max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
         max_model_len = max(max_model_len, 20)
         
@@ -145,8 +193,9 @@ class DiversityIncentiveEngine:
                 vmrs = 1.0 / count
                 bonus = min(1.0 + beta * (vmrs ** exp), max_multiplier)
                 print(f"  Count {count:>3}: VMRS {vmrs:>6.4f}, Bonus {bonus:>5.3f}x")
-
-
+    
+    
+    
 
 if __name__ == "__main__":
 
@@ -209,3 +258,7 @@ if __name__ == "__main__":
     for mid in unique_miners:
         final, mult, model = engine.compute_payout(mid)
         print(f"Miner {mid}: {model} → {mult:.3f}x → Reward = {final:.3f}")
+    
+    # Generate JSON report
+    json_report = engine.generate_rarity_report_json()
+    print(json.dumps(json_report, indent=2))  # Pretty-print for testing

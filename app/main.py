@@ -2,7 +2,6 @@ import os
 import gc
 import time
 import json
-import uuid
 import secrets
 import hashlib
 import base64
@@ -13,7 +12,6 @@ import threading
 import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
-
 from cachetools import TTLCache
 from typing import Union, Dict
 from app.pg_helper import PGHandler
@@ -145,24 +143,30 @@ def save_request_data(
     provider: str,
     x_nonce: str,
     x_hotkey: str,
-    completion_request: ChatCompletionRequest
+    completion_request: ChatCompletionRequest,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    total_tokens: int = 0
 ) -> bool:
-    """Background function to insert all request-related data into postgress"""
     try:
         pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
         result = pg_handler.insert_signed_response(
-            unique_id=request_id,
             response=signed_response,
+            request_id=request_id,
             duration=duration,
             provider=provider,
             x_nonce=x_nonce,
             x_hotkey=x_hotkey,
-            completion_request=completion_request
+            completion_request=completion_request,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens
         )
         return result        
     except Exception as e:
         logger.error(f"Error in background inserts for request {request_id}: {str(e)}")
         app.state.exceptions += 1
+        return False
 
 
 
@@ -226,7 +230,7 @@ app_version = version_info if version_info else "0.8.8"
 app = FastAPI(
     title=f"Bitrecs Verified Inference (Netuid: {BT_NETWORK} - Network: {BT_NETUID})",
     version=app_version,
-    description="Proxy for verified inference with Bittensor integration, providing trusted LLM completions.",
+    description="Verified Inference proxy with Bittensor integration, providing trusted LLM completions.",
     debug=False,
     lifespan=lifespan    
 )
@@ -366,8 +370,6 @@ async def verified_statspg(request: Request):
         MINER_STATS_CACHE[cache_key] = html_content
         logger.info("Updated verified_stats cache from pg")
         return HTMLResponse(content=html_content)
-        
-   
 
 
 @app.get("/providers")
@@ -385,30 +387,26 @@ async def provider_log(request: Request):
     return HTMLResponse(content="<pre>Cache Empty</pre>")
 
 
-@app.get("/mix")
-@limiter.limit("60/minute")
-async def model_mix(request: Request):
+@app.get("/rarity")
+@limiter.limit("120/minute")
+async def model_rarity(request: Request):
     request_ip = get_client_ip(request)
-    logger.info(f"mix endpoint accessed from IP {request_ip}")
+    logger.info(f"Rarity endpoint accessed from IP {request_ip}")
     try:
-        cache_key = "model_mix_report_html"
+        cache_key = "model_rarity_report_json"
         if cache_key in MODEL_MIX_CACHE:
-            logger.info(f"mix endpoint accessed from IP {request_ip} - using cached data")
+            logger.info(f"Rarity endpoint accessed from IP {request_ip} - using cached data")
             report = MODEL_MIX_CACHE[cache_key]
-            return HTMLResponse(content=report)
+            return JSONResponse(content=report)
         
         since_date = datetime.now(timezone.utc) - timedelta(days=7)
         app.state.dei_engine.load_proofs_from_db(since_date)
-        report = app.state.dei_engine.generate_epoch_report()
-        final = f"<h4>Model Mix - Diversity Incentive Engine (Last 7 Days)</h4>\n"
-        final += f"<p>Network: {BT_NETWORK} - Netuid: {BT_NETUID}</p>\n"
-        final += f"<pre>{report}</pre>\n"
-        MODEL_MIX_CACHE[cache_key] = final
-        return HTMLResponse(content=final)
+        report = app.state.dei_engine.generate_rarity_report_json()
+        MODEL_MIX_CACHE[cache_key] = report
+        return JSONResponse(content=report)
     except Exception as e:
-        logger.error(f"Error generating model mix report: {e}")
-        return HTMLResponse(content="<pre>Error generating report</pre>")
-
+        logger.error(f"Error generating rarity report: {e}")
+        return JSONResponse(content={"error": "Error generating rarity report"})
 
 
 @app.get("/is_verified")
@@ -467,7 +465,6 @@ async def is_verified(request: Request, hotkey: str):
     return JSONResponse(status_code=200, content=result)
 
 
-
 @app.post("/v1/chat/completions", response_model=SignedResponse)
 @limiter.limit("240/minute")
 async def forward_proxy_request(
@@ -481,8 +478,7 @@ async def forward_proxy_request(
     x_timestamp: str = Header()
 ) -> SignedResponse:
     
-    client_ip = get_client_ip(request)    
-    #request_id = str(uuid.uuid4())
+    client_ip = get_client_ip(request)
     request_id = secrets.token_hex(16)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
@@ -495,6 +491,13 @@ async def forward_proxy_request(
         if not verify_time(int(x_timestamp)):
             logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
             raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
+        
+        if 1==1:
+            if x_nonce in NONCE_HISTORY:
+                logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
+                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
+            else:
+                NONCE_HISTORY[x_nonce] = True
         
         payload_data = json.loads((await request.body()).decode('utf-8'))
         verified = verify_miner_request(
@@ -525,24 +528,16 @@ async def forward_proxy_request(
             miner_request_key = f"{x_hotkey}:{hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()}"
             if miner_request_key in REQUEST_HASH_HISTORY:
                 #logger.warning(f"\033[33mDuplicate request detected for request {request_id} with hash {miner_request_key}\033[0m")
-                logger.error(f"\033[31mRequest {request_id} is a duplicate and will be rejected.\033[0m")
+                logger.warning(f"\033[31mRequest {request_id} is a duplicate and will be rejected.\033[0m")
                 #raise HTTPException(400, "Duplicate request detected")
             else:
-                REQUEST_HASH_HISTORY[miner_request_key] = True
-
-        if 1==2:
-            if x_nonce in NONCE_HISTORY:
-                logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
-                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
-            else:
-                NONCE_HISTORY[x_nonce] = True
+                REQUEST_HASH_HISTORY[miner_request_key] = True    
                 
         # if 1==2:
         #     nonce_exists = d1_client.check_nonce_used(x_nonce)
         #     if nonce_exists:
         #         logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
         #         raise HTTPException(400, "Replay attack detected: Nonce has already been used")
-
   
         provider = LLMProvider.from_str(x_provider)
         match provider:
@@ -589,8 +584,7 @@ async def forward_proxy_request(
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
         request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
-        response_hash = hashlib.sha256(response.content).hexdigest()
-        nonce = secrets.token_bytes(16)
+        response_hash = hashlib.sha256(response.content).hexdigest()        
         proof = {
             "request_hash": request_hash,
             "response_hash": response_hash,
@@ -619,6 +613,18 @@ async def forward_proxy_request(
         et = time.perf_counter()
         duration = et - st
 
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+        try:
+            response_data = response.json()
+            usage = response_data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+        except Exception as e:
+            logger.warning(f"Could not extract token usage for request {request_id}: {str(e)}")
+
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
             app.state.thread_pool,
@@ -629,13 +635,11 @@ async def forward_proxy_request(
             str(provider),
             x_nonce,
             x_hotkey,
-            completion_request
-        )
-
-        # try:
-        #     app.state.dei_engine.submit_proof(x_hotkey, completion_request.model)
-        # except Exception as e:
-        #     logger.error(f"DEI engine not initialized for request {request_id}: {str(e)}")
+            completion_request,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens
+        )      
 
         app.state.total_requests += 1
         logger.info(f"\033[32mRequest {request_id} took {duration:.2f} seconds on {provider.name}\033[0m")

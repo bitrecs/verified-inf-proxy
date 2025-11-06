@@ -137,7 +137,17 @@ class PGHandler:
         return results
     
 
-    def insert_signed_response(self, unique_id: str,  response: SignedResponse, duration: float = 0, provider: str = "", x_nonce: str = "", x_hotkey: str = "", completion_request: ChatCompletionRequest = None) -> bool:
+    def insert_signed_response(self, 
+                               response: SignedResponse, 
+                               request_id: str = None, 
+                               duration: float = 0, 
+                               provider: str = "", 
+                               x_nonce: str = "", 
+                               x_hotkey: str = "", 
+                               completion_request: ChatCompletionRequest = None, 
+                               prompt_tokens: int = 0, 
+                               completion_tokens: int = 0, 
+                               total_tokens: int = 0) -> bool:
         """Insert all data into the single {vi.signed_responses} table."""
         try:
             conn = self.connect()
@@ -165,20 +175,13 @@ class PGHandler:
                 # Size checks (optional, adjust as needed)
                 if len(completion_request_json.encode('utf-8')) > 1000000 or len(completion_response_json.encode('utf-8')) > 1000000:
                     logger.error("JSON data too large")
-                    return False
+                    return False                
                 
-                if BT_NETUID == "296":
-                    sql = """
-                    INSERT INTO vi.signed_responses (
-                        unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
-                else:
-                    sql = """
-                    INSERT INTO vi.signed_responses_mainnet (
-                        unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
+                sql = f"""
+                INSERT INTO {TABLE_NAME} (
+                    unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response, prompt_tokens, completion_tokens, total_tokens
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
                 
                 params = (
                     response.proof.get('unique_id') or '',
@@ -193,12 +196,15 @@ class PGHandler:
                     provider or '',
                     x_nonce or '',
                     completion_request_json,
-                    completion_response_json
+                    completion_response_json,
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens
                 )
                 
                 cur.execute(sql, params)
                 conn.commit()
-                logger.debug(f"Inserted into signed_responses for unique_id: {unique_id}")
+                logger.debug(f"Inserted into signed_responses for unique_id: {response.proof.get('unique_id')}")
                 return True
         except Exception as e:
             logger.error(f"Insert failed: {e}")
@@ -211,4 +217,3 @@ class PGHandler:
 
 
 
-      
