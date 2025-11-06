@@ -175,10 +175,10 @@ class PGHandler:
                 # Size checks (optional, adjust as needed)
                 if len(completion_request_json.encode('utf-8')) > 1000000 or len(completion_response_json.encode('utf-8')) > 1000000:
                     logger.error("JSON data too large")
-                    return False
+                    return False                
                 
-                sql = """
-                INSERT INTO vi.signed_responses (
+                sql = f"""
+                INSERT INTO {TABLE_NAME} (
                     unique_id, request_hash, response_hash, hotkey, model, signature, timestamp, ttl, duration, provider, nonce, completion_request, completion_response, prompt_tokens, completion_tokens, total_tokens
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
