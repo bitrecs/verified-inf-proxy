@@ -9,6 +9,8 @@ from typing import Dict, List, Tuple
 from datetime import datetime, timezone
 from app.models import Proof
 from app.pg_helper import PGHandler
+from app.rarity_tier import RarityTier
+
 
 """
 Diversity Incentive Engine (DIE)
@@ -74,45 +76,55 @@ class DiversityIncentiveEngine:
         normalized_vmrs = vmrs / max_vmrs  # 0 to 1 scale        
         bonus = 1.0 + self.beta * (normalized_vmrs ** self.exponent)  # Exponential scaling
         return min(bonus, self.max_multiplier)
-
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     """VMRS = 1 / count_of_model"""
-    #     count = self.model_count[model_name]
-    #     if count == 0:
-    #         return 1.0
-    #     vmrs = 1.0 / count
-    #     bonus = 1.0 + self.beta * vmrs
-    #     return min(bonus, self.max_multiplier)
     
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     """Exponential VMRS for stronger rarity rewards."""        
-    #     count = self.model_count[model_name]
-    #     if count == 0:
-    #         return 1.0
-    #     vmrs = 1.0 / count
-    #     bonus = 1.0 + self.beta * (vmrs ** 2)  #adjust exponent
-    #     return min(bonus, self.max_multiplier)
+    def get_rarity_tier(self, model_name: str) -> RarityTier:
+        """Assign tier based on rank percentile (rarest = highest tier)."""
+        if not self.model_count:
+            return RarityTier.COMMON
 
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     """Logarithmic VMRS for diminishing rarity rewards."""        
-    #     count = self.model_count[model_name]
-    #     if count == 0:
-    #         return 1.0
-    #     vmrs = 1.0 / count
-    #     import math
-    #     bonus = 1.0 + self.beta * math.log(vmrs + 1)  # +1 to avoid log(0)
-    #     return min(bonus, self.max_multiplier)
+        # Get sorted counts (ascending: rarest first)
+        sorted_counts = sorted(self.model_count.values())
+        n = len(sorted_counts)
+        if n == 0:
+            return RarityTier.COMMON
+        
+        model_count = self.model_count[model_name]
+        
+        # Find rank (1-based, lower = rarer)
+        try:
+            rank = sorted_counts.index(model_count) + 1
+        except ValueError:
+            return RarityTier.COMMON  # Fallback if count not found
+        
+        # Calculate percentile (0 to 1, rarer = lower percentile)
+        percentile = (rank - 1) / (n - 1) if n > 1 else 0
+        
+        # Percentile-based tiers (adjust thresholds as needed)
+        if percentile <= 0.05:       # Top 5% rarest
+            return RarityTier.UNIQUE
+        elif percentile <= 0.25:     # Top 25% rarest
+            return RarityTier.EPIC
+        elif percentile <= 0.50:     # Top 50% rarest
+            return RarityTier.RARE
+        elif percentile <= 0.75:     # Top 75% rarest
+            return RarityTier.UNCOMMON
+        else:
+            return RarityTier.COMMON
+   
 
     def generate_rarity_report_json(self) -> dict:
         """Generate epoch report as a JSON-serializable dictionary."""
         models_list = []
         for model, count in sorted(self.model_count.items(), key=lambda x: -x[1]):
             bonus = self.get_rarity_bonus(model)
+            tier = self.get_rarity_tier(model)
             rarity = f"1/{count}"
             models_list.append({
                 "model": model,
                 "count": count,
                 "rarity": rarity,
+                "tier": tier.value,
+                "icon": RarityTier.get_tier_icon(tier),
                 "bonus": round(bonus, 8),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
@@ -154,7 +166,7 @@ class DiversityIncentiveEngine:
         max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
         max_model_len = max(max_model_len, 20)
         
-        header = f"{'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus (simulated)':>8}"
+        header = f"{'Tier':<10} {'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus':>8}"
         separator = "-" * len(header)
         
         report_lines = []
@@ -165,10 +177,12 @@ class DiversityIncentiveEngine:
         report_lines.append(header)
         report_lines.append(separator)
 
-        for model, count in sorted(self.model_count.items(), key=lambda x: -x[1]):            
+        for model, count in sorted(self.model_count.items(), key=lambda x: -x[1]):
+            tier = self.get_rarity_tier(model)
             bonus = self.get_rarity_bonus(model)
-            rarity = f"1/{count}"
-            report_lines.append(f"{model:<{max_model_len}} {count:>8} {rarity:>10} {bonus:>7.3f}x")
+            rarity_str = f"1/{count}"
+            # Removed color codes for cleaner output
+            report_lines.append(f"{tier.value:<10} {model:<{max_model_len}} {count:>8} {rarity_str:>10} {bonus:>7.3f}x")
 
         return "\n".join(report_lines)
     
