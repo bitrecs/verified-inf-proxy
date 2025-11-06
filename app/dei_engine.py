@@ -123,7 +123,8 @@ class DiversityIncentiveEngine:
                 "model": model,
                 "count": count,
                 "rarity": rarity,
-                "tier": tier.value,  # Changed from tier.display_name
+                "tier": tier.value,
+                "icon": RarityTier.get_tier_icon(tier),
                 "bonus": round(bonus, 8),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
