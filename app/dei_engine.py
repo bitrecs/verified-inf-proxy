@@ -117,13 +117,16 @@ class DiversityIncentiveEngine:
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
         
-        days = self.active_date_range.days if hasattr(self, 'active_date_range') else "N/A"
+        days = self.active_date_range.days if self.active_date_range else "N/A"
+        dt_from = (datetime.now(timezone.utc) - self.active_date_range).isoformat() if self.active_date_range else "N/A"
         report_dict = {
             "rarity_report": {
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "network": os.environ.get("BT_NETWORK", "test"),
-                "netuid": int(os.environ.get("BT_NETUID", 296)),
-                "date_range": f"Last {days} days",
+                "netuid": int(os.environ.get("BT_NETUID", 296)),                
+                "from": dt_from,
+                "to": datetime.now(timezone.utc).isoformat(),
+                "range": f"Last {days} days",
                 "total_verified": self.total_verified,
                 "parameters": {
                     "beta": self.beta,
