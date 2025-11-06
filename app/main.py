@@ -135,6 +135,7 @@ async def refresh_provider_pings():
             logger.error(f"Error refreshing provider pings: {e}")
         await asyncio.sleep(1800)  # Refresh every 30 minutes
 
+
 def save_request_data(
     signed_response: SignedResponse,
     request_id: str,
@@ -143,9 +144,9 @@ def save_request_data(
     x_nonce: str,
     x_hotkey: str,
     completion_request: ChatCompletionRequest,
-    prompt_tokens: int = 0,  # New
-    completion_tokens: int = 0,  # New
-    total_tokens: int = 0  # New
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    total_tokens: int = 0
 ) -> bool:
     try:
         pg_handler = PGHandler(os.environ.get("DATABASE_URL", ""))
@@ -157,9 +158,9 @@ def save_request_data(
             x_nonce=x_nonce,
             x_hotkey=x_hotkey,
             completion_request=completion_request,
-            prompt_tokens=prompt_tokens,  # New
-            completion_tokens=completion_tokens,  # New
-            total_tokens=total_tokens  # New
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens
         )
         return result        
     except Exception as e:
@@ -368,7 +369,7 @@ async def verified_statspg(request: Request):
         )
         MINER_STATS_CACHE[cache_key] = html_content
         logger.info("Updated verified_stats cache from pg")
-        return HTMLResponse(content=html_content)    
+        return HTMLResponse(content=html_content)
 
 
 @app.get("/providers")
@@ -406,7 +407,6 @@ async def model_rarity(request: Request):
     except Exception as e:
         logger.error(f"Error generating rarity report: {e}")
         return JSONResponse(content={"error": "Error generating rarity report"})
-
 
 
 @app.get("/is_verified")
@@ -465,7 +465,6 @@ async def is_verified(request: Request, hotkey: str):
     return JSONResponse(status_code=200, content=result)
 
 
-
 @app.post("/v1/chat/completions", response_model=SignedResponse)
 @limiter.limit("240/minute")
 async def forward_proxy_request(
@@ -492,6 +491,13 @@ async def forward_proxy_request(
         if not verify_time(int(x_timestamp)):
             logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
             raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
+        
+        if 1==1:
+            if x_nonce in NONCE_HISTORY:
+                logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
+                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
+            else:
+                NONCE_HISTORY[x_nonce] = True
         
         payload_data = json.loads((await request.body()).decode('utf-8'))
         verified = verify_miner_request(
@@ -522,24 +528,16 @@ async def forward_proxy_request(
             miner_request_key = f"{x_hotkey}:{hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()}"
             if miner_request_key in REQUEST_HASH_HISTORY:
                 #logger.warning(f"\033[33mDuplicate request detected for request {request_id} with hash {miner_request_key}\033[0m")
-                logger.error(f"\033[31mRequest {request_id} is a duplicate and will be rejected.\033[0m")
+                logger.warning(f"\033[31mRequest {request_id} is a duplicate and will be rejected.\033[0m")
                 #raise HTTPException(400, "Duplicate request detected")
             else:
-                REQUEST_HASH_HISTORY[miner_request_key] = True
-
-        if 1==1:
-            if x_nonce in NONCE_HISTORY:
-                logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
-                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
-            else:
-                NONCE_HISTORY[x_nonce] = True
+                REQUEST_HASH_HISTORY[miner_request_key] = True    
                 
         # if 1==2:
         #     nonce_exists = d1_client.check_nonce_used(x_nonce)
         #     if nonce_exists:
         #         logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
         #         raise HTTPException(400, "Replay attack detected: Nonce has already been used")
-
   
         provider = LLMProvider.from_str(x_provider)
         match provider:
@@ -586,8 +584,7 @@ async def forward_proxy_request(
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
         request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
-        response_hash = hashlib.sha256(response.content).hexdigest()
-        #nonce = secrets.token_bytes(16)
+        response_hash = hashlib.sha256(response.content).hexdigest()        
         proof = {
             "request_hash": request_hash,
             "response_hash": response_hash,
