@@ -54,6 +54,7 @@ MODEL_MIX_CACHE = TTLCache(maxsize=10, ttl=300) # 5 minutes
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
+RARITY_DAYS_BACK = 2 # Days back for rarity report
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
 BT_NETUID = int(os.environ.get("BT_NETUID", 122))
@@ -361,7 +362,7 @@ async def verified_statspg(request: Request):
         if not DATABASE_URL:
             return HTMLResponse(content="<pre>no db</pre>")
         handler = PGHandler(DATABASE_URL)
-        verified = handler.select_signed_responses(limit=1000)
+        verified = handler.select_signed_responses(limit=5000)
         html_content = HTMLStats.render_verified_stats(
             verified=verified,
             bt_network=BT_NETWORK,
@@ -399,7 +400,7 @@ async def model_rarity(request: Request):
             report = MODEL_MIX_CACHE[cache_key]
             return JSONResponse(content=report)
         
-        since_date = datetime.now(timezone.utc) - timedelta(days=7)
+        since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
         app.state.dei_engine.load_proofs_from_db(since_date)
         report = app.state.dei_engine.generate_rarity_report_json()
         MODEL_MIX_CACHE[cache_key] = report

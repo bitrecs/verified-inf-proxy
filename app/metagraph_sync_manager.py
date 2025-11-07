@@ -71,7 +71,7 @@ class MetagraphSyncManager:
                     substrate=substrate,
                     load_old_nodes=False
                 )
-                tmp_metagraph.sync_nodes()
+                tmp_metagraph.sync_nodes()                
                 snapshot: Dict[str, Dict[str, Any]] = {}
                 for hotkey, node in tmp_metagraph.nodes.items():
                     axon = getattr(node, "axon_info", None)
