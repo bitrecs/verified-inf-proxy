@@ -362,7 +362,7 @@ async def verified_statspg(request: Request):
         if not DATABASE_URL:
             return HTMLResponse(content="<pre>no db</pre>")
         handler = PGHandler(DATABASE_URL)
-        verified = handler.select_signed_responses(limit=5000)
+        verified = handler.select_signed_responses_stats(limit=10_000)
         html_content = HTMLStats.render_verified_stats(
             verified=verified,
             bt_network=BT_NETWORK,

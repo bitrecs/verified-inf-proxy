@@ -31,7 +31,7 @@ class PGHandler:
         try:
             conn = self.connect()
             with conn.cursor() as cur:
-                sql = f"SELECT * FROM {TABLE_NAME} ORDER BY created_at DESC LIMIT %s"
+                sql = f"SELECT hotkey, timestamp, model, duration, signature, provider, created_at FROM {TABLE_NAME} ORDER BY created_at DESC LIMIT %s"          
                 cur.execute(sql, (limit,))
                 rows = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
@@ -45,6 +45,28 @@ class PGHandler:
             if conn:
                 conn.close()
         return results
+
+    def select_signed_responses_stats(self, limit=100) -> List[Dict[str, Any]]:
+        """Select signed responses from the database."""
+        results = []
+        try:
+            conn = self.connect()
+            with conn.cursor() as cur:
+                sql = f"SELECT hotkey, duration, timestamp, provider, model, signature FROM {TABLE_NAME} ORDER BY created_at DESC LIMIT %s"
+                cur.execute(sql, (limit,))
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                for row in rows:
+                    result = dict(zip(columns, row))
+                    results.append(result)
+                logger.debug(f"Selected {len(results)} signed responses")
+        except Exception as e:
+            logger.error(f"Select failed: {e}")
+        finally:
+            if conn:
+                conn.close()
+        return results
+    
     
     def select_signed_responses_since(self, since_date: datetime, limit=100) -> List[Dict[str, Any]]:
         """Select signed responses from the database since a given date."""
