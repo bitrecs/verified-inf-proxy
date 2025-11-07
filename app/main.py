@@ -18,7 +18,7 @@ from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
 from app.html_stats import HTMLStats
 from app.llm_providers import LLMProvider, LLMProviderStats
-from app.dei_engine import DiversityIncentiveEngine
+from app.die_engine import DiversityIncentiveEngine
 from app.utils import (
     is_valid_hotkey, load_version_info, 
     verify_miner_request, verify_time

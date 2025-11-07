@@ -38,6 +38,8 @@ class DiversityIncentiveEngine:
         self.total_verified = 0
         self.exponent = 1.0  # Exponent for rarity scaling
         self.active_date_range = None
+        self.bt_network = os.environ.get("BT_NETWORK", "test")
+        self.bt_netuid = int(os.environ.get("BT_NETUID", 296))
 
     def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
         if not miner_id or not model_name:
@@ -134,8 +136,8 @@ class DiversityIncentiveEngine:
         report_dict = {
             "rarity_report": {
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "network": os.environ.get("BT_NETWORK", "test"),
-                "netuid": int(os.environ.get("BT_NETUID", 296)),                
+                "network": self.bt_network,
+                "netuid": self.bt_netuid,                
                 "from": dt_from,
                 "to": datetime.now(timezone.utc).isoformat(),
                 "range": f"Last {days} days",
