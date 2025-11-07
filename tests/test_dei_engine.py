@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from app.dei_engine import DiversityIncentiveEngine
+from app.die_engine import DiversityIncentiveEngine
 from app.rarity_tier import RarityTier
 
 
