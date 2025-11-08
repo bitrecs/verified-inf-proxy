@@ -11,6 +11,8 @@ import logging
 import threading
 import tracemalloc
 from dotenv import load_dotenv
+
+from app.rarity_tier import RarityTier
 load_dotenv()
 from cachetools import TTLCache
 from typing import Union, Dict
@@ -408,6 +410,27 @@ async def model_rarity(request: Request):
     except Exception as e:
         logger.error(f"Error generating rarity report: {e}")
         return JSONResponse(content={"error": "Error generating rarity report"})
+    
+    
+@app.get("/tiers")
+@limiter.limit("120/minute")
+async def model_rarity_tiers(request: Request):
+    request_ip = get_client_ip(request)
+    logger.info(f"Rarity Tiers endpoint accessed from IP {request_ip}")
+    try:
+        cache_key = "model_rarity_tiers_html"
+        if cache_key in MODEL_MIX_CACHE:
+            logger.info(f"Rarity Tiers endpoint accessed from IP {request_ip} - using cached data")
+            html = MODEL_MIX_CACHE[cache_key]
+            return HTMLResponse(content=html)
+        
+        html = RarityTier.print_tiers_html()
+        MODEL_MIX_CACHE[cache_key] = html
+        return HTMLResponse(content=html)
+    except Exception as e:
+        logger.error(f"Error generating rarity report: {e}")
+        return HTMLResponse(content="<pre>Error generating rarity tiers</pre>")
+
 
 
 @app.get("/is_verified")
