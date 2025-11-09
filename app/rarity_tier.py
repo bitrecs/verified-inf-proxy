@@ -27,35 +27,7 @@ class RarityTier(Enum):
         for tier in RarityTier:
             icon = RarityTier.get_tier_icon(tier)
             print(f"{icon} {tier.value}")
-
-    # @staticmethod
-    # def print_tiers_html() -> str:   
-    #     html_parts = []
-    #     for tier in RarityTier:
-    #         if tier == RarityTier.COMMON:
-    #             color = "gray"
-    #             symbol = "●"
-    #         elif tier == RarityTier.UNCOMMON:
-    #             color = "green"
-    #             symbol = "●"
-    #         elif tier == RarityTier.RARE:
-    #             color = "blue"
-    #             symbol = "●"
-    #         elif tier == RarityTier.EPIC:
-    #             color = "purple"
-    #             symbol = "●"
-    #         elif tier == RarityTier.UNIQUE:
-    #             color = "orange"
-    #             symbol = "♦"
-    #         elif tier == RarityTier.LEGENDARY:
-    #             color = "darkorange"
-    #             symbol = "★"
-    #         else:
-    #             color = "red"
-    #             symbol = "?"
-    #         html_parts.append(f'<span style="color:{color};">{symbol}</span> {tier.value}')
-    #     return "<br>".join(html_parts)
-    
+   
     @staticmethod
     def print_tiers_html() -> str:
         html_parts = []
