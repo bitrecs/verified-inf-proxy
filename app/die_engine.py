@@ -90,25 +90,26 @@ class DiversityIncentiveEngine:
         if n == 0:
             return RarityTier.COMMON
         
-        model_count = self.model_count[model_name]
-        
+        model_count = self.model_count[model_name]        
         # Find rank (1-based, lower = rarer)
         try:
             rank = sorted_counts.index(model_count) + 1
         except ValueError:
-            return RarityTier.COMMON  # Fallback if count not found
+            return RarityTier.COMMON
         
         # Calculate percentile (0 to 1, rarer = lower percentile)
         percentile = (rank - 1) / (n - 1) if n > 1 else 0
         
         # Percentile-based tiers (adjust thresholds as needed)
-        if percentile <= 0.05:       # Top 5% rarest
+        if percentile <= 0.02:      # Legendary 2% rarest
+            return RarityTier.LEGENDARY
+        elif percentile <= 0.05:       # Unique 5% rarest
             return RarityTier.UNIQUE
-        elif percentile <= 0.25:     # Top 25% rarest
+        elif percentile <= 0.25:     # Epic 25% rarest
             return RarityTier.EPIC
-        elif percentile <= 0.50:     # Top 50% rarest
+        elif percentile <= 0.50:     # Rare 50% rarest
             return RarityTier.RARE
-        elif percentile <= 0.75:     # Top 75% rarest
+        elif percentile <= 0.75:     # Uncommon 75% rarest
             return RarityTier.UNCOMMON
         else:
             return RarityTier.COMMON
@@ -219,7 +220,12 @@ if __name__ == "__main__":
 # DEMO: Simulate an epoch
 # ==========================
 
-    engine = DiversityIncentiveEngine(beta=1.0, max_multiplier=2.0)    
+    engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=2.0)
+    RarityTier.print_tiers()
+
+    html_tiers = RarityTier.print_tiers_html()
+    print("\nHTML Tier Representation:")
+    print(html_tiers)
 
     # Simulate 1000+ miners
     miners = {
@@ -276,5 +282,5 @@ if __name__ == "__main__":
         print(f"Miner {mid}: {model} → {mult:.3f}x → Reward = {final:.3f}")
     
     # Generate JSON report
-    json_report = engine.generate_rarity_report_json()
-    print(json.dumps(json_report, indent=2))  # Pretty-print for testing
+    #json_report = engine.generate_rarity_report_json()
+    #print(json.dumps(json_report, indent=2))  # Pretty-print for testing
