@@ -80,18 +80,13 @@ class DiversityIncentiveEngine:
     #     bonus = 1.0 + self.beta * (normalized ** self.exponent)
     #     return min(bonus, self.max_multiplier)
 
+
     def get_rarity_bonus(self, model_name: str) -> float:
         """Calculate bonus based on rarity tier, not VMRS, to differentiate rewards."""
-        tier = self.get_rarity_tier(model_name)        
-        tier_multipliers = {
-            RarityTier.COMMON: 1.0,
-            RarityTier.UNCOMMON: 1.05,
-            RarityTier.RARE: 1.1,
-            RarityTier.EPIC: 1.5,
-            RarityTier.UNIQUE: 1.85,
-            RarityTier.LEGENDARY: 2.0
-        }        
-        return tier_multipliers.get(tier, 1.0)
+        tier = self.get_rarity_tier(model_name)
+        mp = RarityTier.get_tier_multiplier(tier)
+        bonus = min(mp, self.max_multiplier)
+        return bonus      
     
 
     def get_rarity_tier(self, model_name: str) -> RarityTier:
