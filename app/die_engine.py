@@ -36,7 +36,7 @@ class DiversityIncentiveEngine:
         self.proofs: List[Proof] = []
         self.model_count: Dict[str, int] = defaultdict(int)
         self.total_verified = 0
-        self.exponent = 1.0  # Exponent for rarity scaling
+        self.exponent = 1.2  # Exponent for rarity scaling
         self.active_date_range = None
         self.bt_network = os.environ.get("BT_NETWORK", "test")
         self.bt_netuid = int(os.environ.get("BT_NETUID", 296))
@@ -67,49 +67,67 @@ class DiversityIncentiveEngine:
             miner_id = record.get("hotkey", "")
             model_name = record.get("model", "unknown")           
             self.submit_proof(miner_id, model_name)
+    
+
+    # def get_rarity_bonus(self, model_name: str) -> float:
+    #     if not self.model_count or model_name not in self.model_count:
+    #         return 1.0
+
+    #     count = self.model_count[model_name]
+    #     vmrs = 1.0 / count
+    #     max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
+    #     normalized = vmrs / max_vmrs
+    #     bonus = 1.0 + self.beta * (normalized ** self.exponent)
+    #     return min(bonus, self.max_multiplier)
+
 
     def get_rarity_bonus(self, model_name: str) -> float:
-        """Normalized VMRS relative to the rarest model."""
-        count = self.model_count[model_name]
-        if count == 0 or not self.model_count:
-            return 1.0
-        vmrs = 1.0 / count
-        max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
-        normalized_vmrs = vmrs / max_vmrs  # 0 to 1 scale        
-        bonus = 1.0 + self.beta * (normalized_vmrs ** self.exponent)  # Exponential scaling
-        return min(bonus, self.max_multiplier)
+        """Calculate bonus based on rarity tier, not VMRS, to differentiate rewards."""
+        tier = self.get_rarity_tier(model_name)
+        mp = RarityTier.get_tier_multiplier(tier)
+        bonus = min(mp, self.max_multiplier)
+        return bonus      
     
+
     def get_rarity_tier(self, model_name: str) -> RarityTier:
-        """Assign tier based on rank percentile (rarest = highest tier)."""
-        if not self.model_count:
+        """
+        Assign tier based on the percentile rank of the model's count among unique counts.
+        All models with the same count get the same tier, scaling dynamically with the window.
+        Encourages ongoing discovery by rewarding rarity relative to the current set.
+        Tightened thresholds to make tiers less liberal (LEGENDARY rarer, UNIQUE more exclusive).
+        """
+        if not self.model_count or model_name not in self.model_count:
             return RarityTier.COMMON
 
-        # Get sorted counts (ascending: rarest first)
-        sorted_counts = sorted(self.model_count.values())
-        n = len(sorted_counts)
-        if n == 0:
+        count = self.model_count[model_name]
+        
+        # Get unique counts, sorted ascending (rarest first)
+        unique_counts = sorted(set(self.model_count.values()))
+        if not unique_counts:
             return RarityTier.COMMON
         
-        model_count = self.model_count[model_name]        
-        # Find rank (1-based, lower = rarer)
+        num_unique = len(unique_counts)
+        if num_unique == 1:
+            return RarityTier.LEGENDARY  # If only one count level, it's legendary
+        
+        # Find the rank of this count (1-based, rarest = 1)
         try:
-            rank = sorted_counts.index(model_count) + 1
+            rank = unique_counts.index(count) + 1
         except ValueError:
             return RarityTier.COMMON
         
-        # Calculate percentile (0 to 1, rarer = lower percentile)
-        percentile = (rank - 1) / (n - 1) if n > 1 else 0
+        # Percentile based on rank
+        percentile = (rank - 1) / (num_unique - 1) if num_unique > 1 else 0
         
-        # Percentile-based tiers (adjust thresholds as needed)
-        if percentile <= 0.02:      # Legendary 2% rarest
+        if percentile <= 0.01:
             return RarityTier.LEGENDARY
-        elif percentile <= 0.05:       # Unique 5% rarest
+        elif percentile <= 0.1:
             return RarityTier.UNIQUE
-        elif percentile <= 0.25:     # Epic 25% rarest
+        elif percentile <= 0.25:
             return RarityTier.EPIC
-        elif percentile <= 0.50:     # Rare 50% rarest
+        elif percentile <= 0.5:
             return RarityTier.RARE
-        elif percentile <= 0.75:     # Uncommon 75% rarest
+        elif percentile <= 0.75:
             return RarityTier.UNCOMMON
         else:
             return RarityTier.COMMON
@@ -169,7 +187,7 @@ class DiversityIncentiveEngine:
         max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
         max_model_len = max(max_model_len, 20)
         
-        header = f"{'Tier':<10} {'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus':>8}"
+        header = f"{'Tier':<10} {'Model':<{max_model_len}} {'Count':>8} {'Rarity':>10} {'Bonus':>20}"
         separator = "-" * len(header)
         
         report_lines = []
@@ -184,8 +202,15 @@ class DiversityIncentiveEngine:
             tier = self.get_rarity_tier(model)
             bonus = self.get_rarity_bonus(model)
             rarity_str = f"1/{count}"
-            # Removed color codes for cleaner output
-            report_lines.append(f"{tier.value:<10} {model:<{max_model_len}} {count:>8} {rarity_str:>10} {bonus:>7.3f}x")
+            
+            # Format bonus with advantage over common
+            bonus_str = f"{bonus:.3f}x"
+            if bonus > 1.01:
+                advantage = f" (+{(bonus-1)*100:.1f}% vs common)"
+            else:
+                advantage = ""
+            
+            report_lines.append(f"{tier.value:<10} {model:<{max_model_len}} {count:>8} {rarity_str:>10} {bonus_str}{advantage:>20}")
 
         return "\n".join(report_lines)
     
@@ -213,7 +238,6 @@ class DiversityIncentiveEngine:
     
     
     
-
 if __name__ == "__main__":
 
 # ==========================
@@ -269,6 +293,41 @@ if __name__ == "__main__":
     engine.submit_proof("m2000", "qwen-1.5b-v2")  # Only one!
     engine.submit_proof("m2001", "solar-10.7b")  # Only one!
 
+    # Add more ultra-rare models to trigger UNIQUE tier
+    engine.submit_proof("m3000", "claude-3-haiku")  # Only one!
+    engine.submit_proof("m3001", "deepseek-v3")     # Only one!
+    engine.submit_proof("m3002", "o1-mini")         # Only one!
+    engine.submit_proof("m3003", "gemma-7b")        # Only one!
+
+    # Add more models with varying counts to demonstrate all tiers
+    # Count=4: model4
+    for i in range(4000, 4004):
+        engine.submit_proof(f"m{i}", "model4")
+    
+    # Count=5: model5
+    for i in range(5000, 5005):
+        engine.submit_proof(f"m{i}", "model5")
+    
+    # Count=6: model6
+    for i in range(6000, 6006):
+        engine.submit_proof(f"m{i}", "model6")
+    
+    # Count=7: model7
+    for i in range(7000, 7007):
+        engine.submit_proof(f"m{i}", "model7")
+    
+    # Count=8: model8
+    for i in range(8000, 8008):
+        engine.submit_proof(f"m{i}", "model8")
+    
+    # Count=9: model9
+    for i in range(9000, 9009):
+        engine.submit_proof(f"m{i}", "model9")
+    
+    # Count=10: model10
+    for i in range(10000, 10010):
+        engine.submit_proof(f"m{i}", "model10")
+
     # === Print Report ===
     engine.print_epoch_report()
 
@@ -276,7 +335,7 @@ if __name__ == "__main__":
     print("\n")
     print("MINERS")
     print("-" * 50)
-    unique_miners = ["m2000", "m2001", "m1", "m1081"]
+    unique_miners = ["m2000", "m2001", "m1", "m1081", "m3000", "m3001"]
     for mid in unique_miners:
         final, mult, model = engine.compute_payout(mid)
         print(f"Miner {mid}: {model} → {mult:.3f}x → Reward = {final:.3f}")
