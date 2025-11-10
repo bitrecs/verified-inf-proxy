@@ -11,14 +11,13 @@ import logging
 import threading
 import tracemalloc
 from dotenv import load_dotenv
-
-from app.rarity_tier import RarityTier
 load_dotenv()
 from cachetools import TTLCache
 from typing import Union, Dict
 from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
 from app.html_stats import HTMLStats
+from app.rarity_tier import RarityTier
 from app.llm_providers import LLMProvider, LLMProviderStats
 from app.die_engine import DiversityIncentiveEngine
 from app.utils import (
@@ -45,18 +44,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MIN_ALPHA_STAKE = 10  # Minimum stake for alpha access
+MIN_ALPHA_STAKE = 10  # Aalpha access
 METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
 IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for is_verified
-MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
-MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=60) # 60 seconds
-PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=1800) # 30 minutes
-MODEL_MIX_CACHE = TTLCache(maxsize=10, ttl=300) # 5 minutes
+MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=120) # 2 minutes
+MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=120) # 2 minutes
+PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600) # 1 hour
+MODEL_RARITY_CACHE = TTLCache(maxsize=10, ttl=300) # 5 minutes
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
-RARITY_DAYS_BACK = 2 # Days back for rarity report
+RARITY_DAYS_BACK = 5 # Days back for rarity report
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
 BT_NETUID = int(os.environ.get("BT_NETUID", 122))
@@ -397,15 +396,15 @@ async def model_rarity(request: Request):
     logger.info(f"Rarity endpoint accessed from IP {request_ip}")
     try:
         cache_key = "model_rarity_report_json"
-        if cache_key in MODEL_MIX_CACHE:
+        if cache_key in MODEL_RARITY_CACHE:
             logger.info(f"Rarity endpoint accessed from IP {request_ip} - using cached data")
-            report = MODEL_MIX_CACHE[cache_key]
+            report = MODEL_RARITY_CACHE[cache_key]
             return JSONResponse(content=report)
         
         since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
         app.state.dei_engine.load_proofs_from_db(since_date)
         report = app.state.dei_engine.generate_rarity_report_json()
-        MODEL_MIX_CACHE[cache_key] = report
+        MODEL_RARITY_CACHE[cache_key] = report
         return JSONResponse(content=report)
     except Exception as e:
         logger.error(f"Error generating rarity report: {e}")
@@ -419,13 +418,13 @@ async def model_rarity_tiers(request: Request):
     logger.info(f"Rarity Tiers endpoint accessed from IP {request_ip}")
     try:
         cache_key = "model_rarity_tiers_html"
-        if cache_key in MODEL_MIX_CACHE:
+        if cache_key in MODEL_RARITY_CACHE:
             logger.info(f"Rarity Tiers endpoint accessed from IP {request_ip} - using cached data")
-            html = MODEL_MIX_CACHE[cache_key]
+            html = MODEL_RARITY_CACHE[cache_key]
             return HTMLResponse(content=html)
         
         html = RarityTier.print_tiers_html()
-        MODEL_MIX_CACHE[cache_key] = html
+        MODEL_RARITY_CACHE[cache_key] = html
         return HTMLResponse(content=html)
     except Exception as e:
         logger.error(f"Error generating rarity report: {e}")

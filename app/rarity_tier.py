@@ -16,8 +16,8 @@ class RarityTier(Enum):
             RarityTier.UNCOMMON: 1.05,
             RarityTier.RARE: 1.1,
             RarityTier.EPIC: 1.5,
-            RarityTier.UNIQUE: 1.85,
-            RarityTier.LEGENDARY: 2.0
+            RarityTier.UNIQUE: 1.90,
+            RarityTier.LEGENDARY: 3.0
         }
         return multipliers.get(tier, 1.0)
 
