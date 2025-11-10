@@ -154,6 +154,7 @@ class DiversityIncentiveEngine:
                 "rarity": rarity,
                 "tier": tier.value,
                 "icon": RarityTier.get_tier_icon(tier),
+                "color": RarityTier.get_html_color(tier),
                 "bonus": round(bonus, 8),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
