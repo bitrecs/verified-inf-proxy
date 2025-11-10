@@ -41,11 +41,18 @@ class DiversityIncentiveEngine:
         self.bt_network = os.environ.get("BT_NETWORK", "test")
         self.bt_netuid = int(os.environ.get("BT_NETUID", 296))
 
+    @staticmethod
+    def normalize_model_name(model_name: str) -> str:
+        """Normalize model name by stripping any path/provider prefixes."""
+        if '/' in model_name:
+            return model_name.split('/')[-1]
+        return model_name
+
     def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
         if not miner_id or not model_name:
             return
         
-        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
+        normalized_model = self.normalize_model_name(model_name)
         proof = Proof(
             miner_id=miner_id,
             model_name=normalized_model,
@@ -66,7 +73,7 @@ class DiversityIncentiveEngine:
         for record in records:
             miner_id = record.get("hotkey", "")
             model_name = record.get("model", "unknown")    
-            normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
+            normalized_model = self.normalize_model_name(model_name)
             self.submit_proof(miner_id, normalized_model)
     
 
@@ -84,7 +91,7 @@ class DiversityIncentiveEngine:
 
     def get_rarity_bonus(self, model_name: str) -> float:
         """Calculate bonus based on rarity tier, not VMRS, to differentiate rewards."""
-        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
+        normalized_model = self.normalize_model_name(model_name)
         tier = self.get_rarity_tier(normalized_model)
         mp = RarityTier.get_tier_multiplier(tier)
         bonus = min(mp, self.max_multiplier)
@@ -97,7 +104,7 @@ class DiversityIncentiveEngine:
         All models with the same count get the same tier, scaling dynamically with the window.
         Encourages ongoing discovery by rewarding rarity relative to the current set.        
         """
-        model_name = model_name.split('/')[-1] if '/' in model_name else model_name
+        model_name = self.normalize_model_name(model_name)
         if not self.model_count or model_name not in self.model_count:
             return RarityTier.COMMON
 
