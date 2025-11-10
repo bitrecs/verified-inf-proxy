@@ -55,7 +55,7 @@ MODEL_RARITY_CACHE = TTLCache(maxsize=10, ttl=300) # 5 minutes
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
-RARITY_DAYS_BACK = 5 # Days back for rarity report
+RARITY_DAYS_BACK = 7 # Days back for rarity report
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
 BT_NETUID = int(os.environ.get("BT_NETUID", 122))
