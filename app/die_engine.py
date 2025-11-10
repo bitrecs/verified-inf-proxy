@@ -30,22 +30,29 @@ params:
 """
 
 class DiversityIncentiveEngine:
-    def __init__(self, beta: float = 1.0, max_multiplier: float = 2.0):
+    def __init__(self, beta: float = 1.0, max_multiplier: float = 3.0):
         self.beta = beta #more reward for rarity
         self.max_multiplier = max_multiplier #cap on reward multiplier
         self.proofs: List[Proof] = []
         self.model_count: Dict[str, int] = defaultdict(int)
         self.total_verified = 0
-        self.exponent = 1.2  # Exponent for rarity scaling
+        self.exponent = 1.2
         self.active_date_range = None
         self.bt_network = os.environ.get("BT_NETWORK", "test")
         self.bt_netuid = int(os.environ.get("BT_NETUID", 296))
+
+    @staticmethod
+    def normalize_model_name(model_name: str) -> str:
+        """Normalize model name by stripping any path/provider prefixes."""
+        if '/' in model_name:
+            return model_name.split('/')[-1]
+        return model_name
 
     def submit_proof(self, miner_id: str, model_name: str, base_reward: float = 1.0):
         if not miner_id or not model_name:
             return
         
-        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name        
+        normalized_model = self.normalize_model_name(model_name)
         proof = Proof(
             miner_id=miner_id,
             model_name=normalized_model,
@@ -65,8 +72,9 @@ class DiversityIncentiveEngine:
         records = pg_handler.select_signed_responses_formix_since(since_date, limit=500_000)
         for record in records:
             miner_id = record.get("hotkey", "")
-            model_name = record.get("model", "unknown")           
-            self.submit_proof(miner_id, model_name)
+            model_name = record.get("model", "unknown")    
+            normalized_model = self.normalize_model_name(model_name)
+            self.submit_proof(miner_id, normalized_model)
     
 
     # def get_rarity_bonus(self, model_name: str) -> float:
@@ -83,7 +91,8 @@ class DiversityIncentiveEngine:
 
     def get_rarity_bonus(self, model_name: str) -> float:
         """Calculate bonus based on rarity tier, not VMRS, to differentiate rewards."""
-        tier = self.get_rarity_tier(model_name)
+        normalized_model = self.normalize_model_name(model_name)
+        tier = self.get_rarity_tier(normalized_model)
         mp = RarityTier.get_tier_multiplier(tier)
         bonus = min(mp, self.max_multiplier)
         return bonus      
@@ -93,15 +102,14 @@ class DiversityIncentiveEngine:
         """
         Assign tier based on the percentile rank of the model's count among unique counts.
         All models with the same count get the same tier, scaling dynamically with the window.
-        Encourages ongoing discovery by rewarding rarity relative to the current set.
-        Tightened thresholds to make tiers less liberal (LEGENDARY rarer, UNIQUE more exclusive).
+        Encourages ongoing discovery by rewarding rarity relative to the current set.        
         """
+        model_name = self.normalize_model_name(model_name)
         if not self.model_count or model_name not in self.model_count:
             return RarityTier.COMMON
 
         count = self.model_count[model_name]
         
-        # Get unique counts, sorted ascending (rarest first)
         unique_counts = sorted(set(self.model_count.values()))
         if not unique_counts:
             return RarityTier.COMMON
@@ -161,11 +169,11 @@ class DiversityIncentiveEngine:
                 "to": datetime.now(timezone.utc).isoformat(),
                 "range": f"Last {days} days",
                 "total_verified": self.total_verified,
-                "parameters": {
-                    "beta": self.beta,
-                    "exponent": self.exponent,
-                    "max_multiplier": self.max_multiplier
-                },
+                # "parameters": {
+                #     "beta": self.beta,
+                #     "exponent": self.exponent,
+                #     "max_multiplier": self.max_multiplier
+                # },
                 "models": models_list
             }
         }
@@ -244,7 +252,7 @@ if __name__ == "__main__":
 # DEMO: Simulate an epoch
 # ==========================
 
-    engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=2.0)
+    engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=3.0)
     RarityTier.print_tiers()
 
     html_tiers = RarityTier.print_tiers_html()

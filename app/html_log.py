@@ -1,12 +1,14 @@
 import html
 import json
 from typing import List, Dict, Any
+from app.die_engine import DiversityIncentiveEngine
+from app.rarity_tier import RarityTier
 
 
 class HTMLLog:
 
     @staticmethod
-    def render_verified_display(verified: List[Dict[str, Any]], bt_network: str, bt_netuid: int) -> str:
+    def render_verified_display(verified: List[Dict[str, Any]], bt_network: str, bt_netuid: int, die_engine: DiversityIncentiveEngine) -> str:
         """Render the verified responses display page."""
         rows_html = ""
         miners = set()
@@ -17,13 +19,16 @@ class HTMLLog:
             duration = item.get('duration', 'N/A') or 'N/A'
             signature = item.get('signature', 'N/A')
             provider = item.get('provider', 'N/A')
-            miners.add(hotkey)
+            miners.add(hotkey)           
             
             # Parse response_json to extract content
             response_content = 'N/A'
             miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
             
             try:
+                tier = die_engine.get_rarity_tier(model)  
+                tier_color = RarityTier.get_html_color(tier)
+            
                 response_data = json.loads(item.get('completion_response', '{}'))
                 if 'choices' in response_data and response_data['choices']:
                     content = response_data['choices'][0].get('message', {}).get('content', '')
@@ -54,7 +59,7 @@ class HTMLLog:
                         <tr>
                             <td data-label="{html.escape('Timestamp')}" class="timestamp">{escaped_timestamp}</td>
                             <td data-label="{html.escape('Hotkey')}" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{escaped_hotkey}</a></td>
-                            <td data-label="{html.escape('Model')}" class="model">{escaped_model}</td>
+                            <td data-label="{html.escape('Model')}" class="model" title={tier.name}><span style="color: {tier_color};">{escaped_model}</span></td>
                             <td data-label="{html.escape('Provider')}" class="model">{escaped_provider}</td>
                             <td data-label="{html.escape('Response')}" class="response">{escaped_response_content}</td>
                             <td data-label="{html.escape('Duration')}" class="duration">{escaped_duration}s</td>
