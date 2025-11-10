@@ -185,7 +185,9 @@ async def lifespan(app: FastAPI):
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0
-    app.state.dei_engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=2.0)
+    app.state.dei_engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=3.0)
+    # since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
+    # app.state.dei_engine.load_proofs_from_db(since_date)
     metagraph_manager.start()
     
     # Background task to restart manager if dead
@@ -337,10 +339,15 @@ async def verified_logpg(request: Request):
             return HTMLResponse(content="<pre>no db</pre>")
         handler = PGHandler(DATABASE_URL)
         verified = handler.select_signed_responses(limit=500)
+
+        since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
+        app.state.dei_engine.load_proofs_from_db(since_date)
+
         html_content = HTMLLog.render_verified_display(
             verified=verified,
             bt_network=BT_NETWORK,
-            bt_netuid=BT_NETUID
+            bt_netuid=BT_NETUID,
+            die_engine=app.state.dei_engine
         )
         MINER_LOG_CACHE[cache_key] = html_content
         logger.info("Updated verified_log cache")

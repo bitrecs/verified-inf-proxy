@@ -39,6 +39,19 @@ class RarityTier(Enum):
         for tier in RarityTier:
             icon = RarityTier.get_tier_icon(tier)
             print(f"{icon} {tier.value}")
+
+    @staticmethod
+    def get_html_color(tier: 'RarityTier') -> str:
+        """Return the HTML color code for the tier."""
+        colors = {
+            RarityTier.COMMON: "gray",
+            RarityTier.UNCOMMON: "green",
+            RarityTier.RARE: "blue",
+            RarityTier.EPIC: "purple",
+            RarityTier.UNIQUE: "orange",
+            RarityTier.LEGENDARY: "darkorange"
+        }
+        return colors.get(tier, "red")  # Red for unknown
    
     @staticmethod
     def print_tiers_html() -> str:
