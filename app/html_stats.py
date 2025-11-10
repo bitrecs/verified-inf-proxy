@@ -2,12 +2,14 @@ import html
 import json
 from typing import List, Dict, Any
 from collections import defaultdict
+from app.die_engine import DiversityIncentiveEngine
+from app.rarity_tier import RarityTier
 
 
 class HTMLStats:
 
     @staticmethod
-    def render_verified_stats(verified: List[Dict[str, Any]], bt_network: str, bt_netuid: int) -> str:
+    def render_verified_stats(verified: List[Dict[str, Any]], bt_network: str, bt_netuid: int, die_engine: DiversityIncentiveEngine) -> str:
         """Render basic stats like duration etc for each unique hotkey"""
         # Aggregate stats per hotkey
         hotkey_stats = defaultdict(lambda: {
@@ -32,6 +34,7 @@ class HTMLStats:
             provider = item.get('provider', 'N/A')
             model = item.get('model', 'N/A')
             signature = item.get('signature', 'N/A')
+         
             
             stats = hotkey_stats[hotkey]
             stats['total_responses'] += 1
@@ -48,17 +51,21 @@ class HTMLStats:
         for hotkey, stats in hotkey_stats.items():
             avg_duration = stats['total_duration'] / stats['total_responses'] if stats['total_responses'] > 0 else 0.0
             providers_str = '<br> '.join(sorted(stats['providers']))
-            models_str = '<br> '.join(sorted(stats['models']))
-            last_signature = stats['signatures'][-1] if stats['signatures'] else 'N/A'
-            miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
+            #models_str = '<br> '.join(sorted(stats['models']))
+            models_str = ""
+            for model in stats['models']:
+                tier = die_engine.get_rarity_tier(model)  # Update model count for rarity engine
+                tier_color = RarityTier.get_html_color(tier)
+                escaped_model = html.escape(model)
+                models_str += f'<span style="color: {tier_color};" title="{tier.name}">{escaped_model}</span><br> '
+            models_str = models_str.rstrip('<br> ')
             
-            # Escape all dynamic content for HTML safety
+            miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"            
+            
             escaped_hotkey = html.escape(str(hotkey))
             escaped_total_responses = html.escape(str(stats['total_responses']))
             escaped_avg_duration = html.escape(f"{avg_duration:.2f}")
-            escaped_last_timestamp = html.escape(str(stats['last_timestamp']))
-            #escaped_providers = html.escape(providers_str)
-            #escaped_models = html.escape(models_str)
+            escaped_last_timestamp = html.escape(str(stats['last_timestamp']))            
             
             rows_html += f"""
                         <tr>

@@ -45,7 +45,7 @@ class DiversityIncentiveEngine:
         if not miner_id or not model_name:
             return
         
-        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name        
+        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
         proof = Proof(
             miner_id=miner_id,
             model_name=normalized_model,
@@ -65,8 +65,9 @@ class DiversityIncentiveEngine:
         records = pg_handler.select_signed_responses_formix_since(since_date, limit=500_000)
         for record in records:
             miner_id = record.get("hotkey", "")
-            model_name = record.get("model", "unknown")           
-            self.submit_proof(miner_id, model_name)
+            model_name = record.get("model", "unknown")    
+            normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
+            self.submit_proof(miner_id, normalized_model)
     
 
     # def get_rarity_bonus(self, model_name: str) -> float:
@@ -83,7 +84,8 @@ class DiversityIncentiveEngine:
 
     def get_rarity_bonus(self, model_name: str) -> float:
         """Calculate bonus based on rarity tier, not VMRS, to differentiate rewards."""
-        tier = self.get_rarity_tier(model_name)
+        normalized_model = model_name.split('/')[-1] if '/' in model_name else model_name
+        tier = self.get_rarity_tier(normalized_model)
         mp = RarityTier.get_tier_multiplier(tier)
         bonus = min(mp, self.max_multiplier)
         return bonus      
@@ -95,6 +97,7 @@ class DiversityIncentiveEngine:
         All models with the same count get the same tier, scaling dynamically with the window.
         Encourages ongoing discovery by rewarding rarity relative to the current set.        
         """
+        model_name = model_name.split('/')[-1] if '/' in model_name else model_name
         if not self.model_count or model_name not in self.model_count:
             return RarityTier.COMMON
 

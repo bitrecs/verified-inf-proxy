@@ -371,10 +371,13 @@ async def verified_statspg(request: Request):
             return HTMLResponse(content="<pre>no db</pre>")
         handler = PGHandler(DATABASE_URL)
         verified = handler.select_signed_responses_stats(limit=10_000)
+        since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
+        app.state.dei_engine.load_proofs_from_db(since_date)
         html_content = HTMLStats.render_verified_stats(
             verified=verified,
             bt_network=BT_NETWORK,
-            bt_netuid=BT_NETUID
+            bt_netuid=BT_NETUID,
+            die_engine=app.state.dei_engine
         )
         MINER_STATS_CACHE[cache_key] = html_content
         logger.info("Updated verified_stats cache from pg")
