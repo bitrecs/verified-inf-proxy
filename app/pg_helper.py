@@ -31,7 +31,7 @@ class PGHandler:
         try:
             conn = self.connect()
             with conn.cursor() as cur:
-                sql = f"SELECT hotkey, timestamp, model, duration, signature, provider, created_at FROM {TABLE_NAME} ORDER BY created_at DESC LIMIT %s"          
+                sql = f"SELECT hotkey, timestamp, model, duration, signature, provider, created_at, completion_response FROM {TABLE_NAME} ORDER BY created_at DESC LIMIT %s"          
                 cur.execute(sql, (limit,))
                 rows = cur.fetchall()
                 columns = [desc[0] for desc in cur.description]
