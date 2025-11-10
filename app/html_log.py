@@ -26,7 +26,7 @@ class HTMLLog:
             miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
             
             try:
-                tier = die_engine.get_rarity_tier(model)  # Update model count for rarity engine
+                tier = die_engine.get_rarity_tier(model)  
                 tier_color = RarityTier.get_html_color(tier)
             
                 response_data = json.loads(item.get('completion_response', '{}'))
