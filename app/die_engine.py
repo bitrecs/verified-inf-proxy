@@ -85,8 +85,8 @@ class DiversityIncentiveEngine:
         miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
         proof_count = len(miner_proofs)
         
-        # Novice: Very few proofs (e.g., <1% of total or <5 absolute)
-        if proof_count < max(0.01 * self.total_verified, 5):
+        # Novice: Very few proofs (e.g., <10 absolute for new/joiners in 7-day window)
+        if proof_count < 10:
             return "Novice"  # New or inactive miners
         
         # Existing entropy-based logic for active miners
