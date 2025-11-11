@@ -1,6 +1,7 @@
 import json
 import os
 import secrets
+from app.die_engine import DiversityIncentiveEngine
 from app.pg_helper import PGHandler
 from app.models import SignedResponse, ChatCompletionRequest
 from dotenv import load_dotenv
@@ -107,12 +108,14 @@ def test_render_verfied_stats_from_pg():
 
     # Create handler
     handler = PGHandler(TEST_DB_URL)
+    die_engine = DiversityIncentiveEngine()
 
     verified = handler.select_signed_responses(limit=100)
     html_content = HTMLStats.render_verified_stats(
         verified=verified,
         bt_network="testnet",
-        bt_netuid=1
+        bt_netuid=1,
+        die_engine=die_engine
     )
 
     print(f"Rendered HTML content length: {len(html_content)}")
