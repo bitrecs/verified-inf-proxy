@@ -1,5 +1,6 @@
-import json
 import os
+import math
+import json
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from dotenv import load_dotenv
@@ -75,18 +76,35 @@ class DiversityIncentiveEngine:
             model_name = record.get("model", "unknown")    
             normalized_model = self.normalize_model_name(model_name)
             self.submit_proof(miner_id, normalized_model)
+   
     
-
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     if not self.model_count or model_name not in self.model_count:
-    #         return 1.0
-
-    #     count = self.model_count[model_name]
-    #     vmrs = 1.0 / count
-    #     max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
-    #     normalized = vmrs / max_vmrs
-    #     bonus = 1.0 + self.beta * (normalized ** self.exponent)
-    #     return min(bonus, self.max_multiplier)
+    def get_miner_class(self, miner_id: str) -> str:
+        """
+        Derive miner's class based on the entropy of their model usage history.
+        """
+        miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
+        proof_count = len(miner_proofs)
+        
+        # Novice: Very few proofs (e.g., <1% of total or <5 absolute)
+        if proof_count < max(0.01 * self.total_verified, 5):
+            return "Novice"  # New or inactive miners
+        
+        # Existing entropy-based logic for active miners
+        model_counts = defaultdict(int)
+        for proof in miner_proofs:
+            model_counts[proof.model_name] += 1
+        
+        total = proof_count
+        entropy = -sum((count / total) * math.log2(count / total) for count in model_counts.values())
+        max_entropy = math.log2(len(model_counts)) if model_counts else 0
+        
+        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
+        if normalized_entropy > 0.7:
+            return "Sorcerer"  # High diversity: masters many "spells" (models)
+        elif normalized_entropy > 0.3:
+            return "Ranger"    # Balanced: versatile explorer
+        else:
+            return "Monk"      # Low diversity: focused disciple
 
 
     def get_rarity_bonus(self, model_name: str) -> float:
@@ -127,9 +145,9 @@ class DiversityIncentiveEngine:
         # Percentile based on rank
         percentile = (rank - 1) / (num_unique - 1) if num_unique > 1 else 0
         
-        if percentile <= 0.01:
+        if percentile <= 0.009:
             return RarityTier.LEGENDARY
-        elif percentile <= 0.1:
+        elif percentile <= 0.09:
             return RarityTier.UNIQUE
         elif percentile <= 0.25:
             return RarityTier.EPIC
@@ -180,6 +198,29 @@ class DiversityIncentiveEngine:
         }
         return report_dict
 
+    def generate_miner_class_report_json(self) -> dict:
+        all_miners = set(p.miner_id for p in self.proofs)
+        miner_classes = []
+        for miner_id in all_miners:
+            mclass = self.get_miner_class(miner_id)
+            miner_classes.append({
+                "miner_hotkey": miner_id,
+                "class": mclass,
+                "proofs": len([p for p in self.proofs if p.miner_id == miner_id]),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        report_dict = {
+            "miner_class_report": {
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "network": self.bt_network,
+                "netuid": self.bt_netuid,
+                "total_miners": len(all_miners),
+                "miners": miner_classes
+            }
+        }
+        return report_dict
+        
+
     def compute_payout(self, miner_id: str) -> Tuple[float, float, str]:
         """Return (final_reward, multiplier, model_used)"""
         miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
@@ -205,12 +246,7 @@ class DiversityIncentiveEngine:
         #report_lines.append(f"Parameters: Beta={self.beta}, Exponent={self.exponent}, Max Multiplier={self.max_multiplier}")
         report_lines.append(f"Parameters: Max Multiplier={self.max_multiplier}")
         report_lines.append(f"{'='*len(header)}")
-
-        # In generate_epoch_report, change the multipliers JSON dump to handle enum keys
-        # multipliers = RarityTier.get_multipliers()
-        # mp = json.dumps({tier.value: mult for tier, mult in multipliers.items()}, indent=2)
-        # report_lines.append(f"Tier Multipliers: {mp}")
-
+       
         report_lines.append(f"{'='*len(header)}")
         report_lines.append(header)
         report_lines.append(separator)
@@ -235,23 +271,6 @@ class DiversityIncentiveEngine:
     def print_epoch_report(self):
         report = self.generate_epoch_report()
         print(report)
-    
-    
-    # def render_bonus_comparison(exponents: list, counts: list, beta: float = 1.0, max_multiplier: float = 3.0):
-    #     """
-    #     Renders and prints the rarity bonus for different exponents and counts.
-    #     Useful for comparing how exponent affects incentives.
-    #     """
-    #     print(f"Bonus Comparison (Beta={beta}, Max Multiplier={max_multiplier})")
-    #     print("=" * 60)
-        
-    #     for exp in exponents:
-    #         print(f"\nExponent: {exp}")
-    #         print("-" * 30)
-    #         for count in counts:
-    #             vmrs = 1.0 / count
-    #             bonus = min(1.0 + beta * (vmrs ** exp), max_multiplier)
-    #             print(f"  Count {count:>3}: VMRS {vmrs:>6.4f}, Bonus {bonus:>5.3f}x")
     
     
     
@@ -301,16 +320,16 @@ if __name__ == "__main__":
     for i in range(1051, 1081):
         engine.submit_proof(f"m{i}", "gemma-2b", base_reward=1.0)
 
-    # Rare models
-    engine.submit_proof("m1081", "phi-3-mini")
+    
+    engine.submit_proof("m1081", "phi-3-mini") #epic
     engine.submit_proof("m1082", "phi-3-mini")
     engine.submit_proof("m1083", "phi-3-mini")
 
-    engine.submit_proof("m2000", "qwen-1.5b-v2")  # Only one!
-    engine.submit_proof("m2000", "qwen-1.5b-v2")  # Only one!
-    engine.submit_proof("m2001", "solar-10.7b")  # Only one!
+    engine.submit_proof("m2000", "qwen-1.5b-v2") #unique  
+    engine.submit_proof("m2000", "qwen-1.5b-v2")
 
     # Add more ultra-rare models to trigger UNIQUE tier
+    engine.submit_proof("m2001", "solar-10.7b")
     engine.submit_proof("m3000", "claude-3-haiku")  # Only one!
     engine.submit_proof("m3001", "deepseek-v3")     # Only one!
     engine.submit_proof("m3002", "o1-mini")         # Only one!
@@ -360,3 +379,7 @@ if __name__ == "__main__":
     # Generate JSON report
     #json_report = engine.generate_rarity_report_json()
     #print(json.dumps(json_report, indent=2))  # Pretty-print for testing
+
+    miner_class_report = engine.generate_miner_class_report_json()
+    print("\nMiner Class Report:")
+    print(json.dumps(miner_class_report, indent=2))
