@@ -1,5 +1,6 @@
-import json
 import os
+import math
+import json
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from dotenv import load_dotenv
@@ -74,19 +75,58 @@ class DiversityIncentiveEngine:
             miner_id = record.get("hotkey", "")
             model_name = record.get("model", "unknown")    
             normalized_model = self.normalize_model_name(model_name)
-            self.submit_proof(miner_id, normalized_model)
+            self.submit_proof(miner_id, normalized_model)    
+
+    # def get_miner_class(self, miner_id: str) -> str:
+    #     """Derive miner's class based on their model usage history, with weighted scoring for higher tiers."""
+    #     miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
+    #     if not miner_proofs:
+    #         return "Warrior"  # Default for new miners
+        
+    #     # Weighted scores: higher tiers give more points to their classes
+    #     scores = {"Warrior": 0, "Mage": 0, "Rogue": 0}
+    #     for proof in miner_proofs:
+    #         tier = self.get_rarity_tier(proof.model_name)
+    #         if tier == RarityTier.COMMON:
+    #             scores["Warrior"] += 1
+    #         elif tier == RarityTier.UNCOMMON:
+    #             scores["Warrior"] += 0.5  # Less weight for mid-common
+    #         elif tier == RarityTier.RARE:
+    #             scores["Rogue"] += 1
+    #         elif tier == RarityTier.EPIC:
+    #             scores["Rogue"] += 1.5  # More weight for higher mid-rare
+    #         elif tier == RarityTier.UNIQUE:
+    #             scores["Mage"] += 1.5
+    #         elif tier == RarityTier.LEGENDARY:
+    #             scores["Mage"] += 2  # Highest weight for rarest
     
-
-    # def get_rarity_bonus(self, model_name: str) -> float:
-    #     if not self.model_count or model_name not in self.model_count:
-    #         return 1.0
-
-    #     count = self.model_count[model_name]
-    #     vmrs = 1.0 / count
-    #     max_vmrs = max(1.0 / c for c in self.model_count.values() if c > 0)
-    #     normalized = vmrs / max_vmrs
-    #     bonus = 1.0 + self.beta * (normalized ** self.exponent)
-    #     return min(bonus, self.max_multiplier)
+    #     # Return class with highest score
+    #     return max(scores, key=scores.get)
+    
+    def get_miner_class(self, miner_id: str) -> str:
+        miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
+        proof_count = len(miner_proofs)
+        
+        # Novice: Very few proofs (e.g., <1% of total or <5 absolute)
+        if proof_count < max(0.01 * self.total_verified, 5):
+            return "Novice"  # New or inactive miners
+        
+        # Existing entropy-based logic for active miners
+        model_counts = defaultdict(int)
+        for proof in miner_proofs:
+            model_counts[proof.model_name] += 1
+        
+        total = proof_count
+        entropy = -sum((count / total) * math.log2(count / total) for count in model_counts.values())
+        max_entropy = math.log2(len(model_counts)) if model_counts else 0
+        
+        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
+        if normalized_entropy > 0.7:
+            return "Sorcerer"  # High diversity: masters many "spells" (models)
+        elif normalized_entropy > 0.3:
+            return "Ranger"    # Balanced: versatile explorer
+        else:
+            return "Monk"      # Low diversity: focused disciple
 
 
     def get_rarity_bonus(self, model_name: str) -> float:
@@ -179,6 +219,29 @@ class DiversityIncentiveEngine:
             }
         }
         return report_dict
+
+    def generate_miner_class_report_json(self) -> dict:
+        all_miners = set(p.miner_id for p in self.proofs)
+        miner_classes = []
+        for miner_id in all_miners:
+            mclass = self.get_miner_class(miner_id)
+            miner_classes.append({
+                "miner_id": miner_id,
+                "class": mclass,
+                "proofs": len([p for p in self.proofs if p.miner_id == miner_id]),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+        report_dict = {
+            "miner_class_report": {
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "network": self.bt_network,
+                "netuid": self.bt_netuid,
+                "total_miners": len(all_miners),
+                "miner_classes": miner_classes
+            }
+        }
+        return report_dict
+        
 
     def compute_payout(self, miner_id: str) -> Tuple[float, float, str]:
         """Return (final_reward, multiplier, model_used)"""
@@ -338,3 +401,7 @@ if __name__ == "__main__":
     # Generate JSON report
     #json_report = engine.generate_rarity_report_json()
     #print(json.dumps(json_report, indent=2))  # Pretty-print for testing
+
+    miner_class_report = engine.generate_miner_class_report_json()
+    print("\nMiner Class Report:")
+    print(json.dumps(miner_class_report, indent=2))

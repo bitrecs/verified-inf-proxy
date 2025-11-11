@@ -52,6 +52,7 @@ MINER_LOG_CACHE = TTLCache(maxsize=10, ttl=300) # 5 minutes
 MINER_STATS_CACHE = TTLCache(maxsize=10, ttl=600) # 10 minutes
 PROVIDER_PING_CACHE = TTLCache(maxsize=10, ttl=3600) # 1 hour
 MODEL_RARITY_CACHE = TTLCache(maxsize=10, ttl=300) # 5 minutes
+MINER_CLASSES_CACHE = TTLCache(maxsize=10, ttl=900) # 15 minutes
 
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
@@ -439,6 +440,28 @@ async def model_rarity_tiers(request: Request):
     except Exception as e:
         logger.error(f"Error generating rarity report: {e}")
         return HTMLResponse(content="<pre>Error generating rarity tiers</pre>")
+    
+
+@app.get("/classes")
+@limiter.limit("120/minute")
+async def miner_classes(request: Request):
+    request_ip = get_client_ip(request)
+    logger.info(f"Miner Classes endpoint accessed from IP {request_ip}")
+    try:
+        cache_key = "miner_classes_json"
+        if cache_key in MINER_CLASSES_CACHE:
+            logger.info(f"Miner Classes endpoint accessed from IP {request_ip} - using cached data")
+            report = MINER_CLASSES_CACHE[cache_key]
+            return JSONResponse(content=report)
+        
+        since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
+        app.state.dei_engine.load_proofs_from_db(since_date)
+        report = app.state.dei_engine.generate_miner_class_report_json()
+        MINER_CLASSES_CACHE[cache_key] = report
+        return JSONResponse(content=report)
+    except Exception as e:
+        logger.error(f"Error generating miner classes report: {e}")
+        return JSONResponse(content={"error": "Error generating miner classes report"})
 
 
 
