@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class MetagraphSyncManager:
     """Dedicated manager to keep metagraph data fresh without leaking threads."""
-    def __init__(self, network: str, netuid: int, sync_interval: int = 600, max_cycles_before_restart: int = 8):
+    def __init__(self, network: str, netuid: int, sync_interval: int = 600, max_cycles_before_restart: int = 6):
         self.network = network
         self.netuid = netuid
         self.sync_interval = sync_interval

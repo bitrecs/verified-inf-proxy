@@ -1,7 +1,7 @@
+import json
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import json
 from dotenv import load_dotenv
 load_dotenv()
 from collections import defaultdict
@@ -170,11 +170,11 @@ class DiversityIncentiveEngine:
                 "to": datetime.now(timezone.utc).isoformat(),
                 "range": f"Last {days} days",
                 "total_verified": self.total_verified,
-                # "parameters": {
-                #     "beta": self.beta,
-                #     "exponent": self.exponent,
-                #     "max_multiplier": self.max_multiplier
-                # },
+                "parameters": {
+                    #"beta": self.beta,
+                    #"exponent": self.exponent,
+                    "max_multiplier": self.max_multiplier
+                },
                 "models": models_list
             }
         }
@@ -201,8 +201,16 @@ class DiversityIncentiveEngine:
         
         report_lines = []
         report_lines.append(f"\n{'='*len(header)}")
-        report_lines.append(f" EPOCH REPORT: {self.total_verified} Verified Proofs")
-        report_lines.append(f"Parameters: Beta={self.beta}, Exponent={self.exponent}, Max Multiplier={self.max_multiplier}")
+        report_lines.append(f" SAMPLE EPOCH REPORT: {self.total_verified} Verified Proofs")
+        #report_lines.append(f"Parameters: Beta={self.beta}, Exponent={self.exponent}, Max Multiplier={self.max_multiplier}")
+        report_lines.append(f"Parameters: Max Multiplier={self.max_multiplier}")
+        report_lines.append(f"{'='*len(header)}")
+
+        # In generate_epoch_report, change the multipliers JSON dump to handle enum keys
+        # multipliers = RarityTier.get_multipliers()
+        # mp = json.dumps({tier.value: mult for tier, mult in multipliers.items()}, indent=2)
+        # report_lines.append(f"Tier Multipliers: {mp}")
+
         report_lines.append(f"{'='*len(header)}")
         report_lines.append(header)
         report_lines.append(separator)
@@ -229,21 +237,21 @@ class DiversityIncentiveEngine:
         print(report)
     
     
-    def render_bonus_comparison(exponents: list, counts: list, beta: float = 1.0, max_multiplier: float = 3.0):
-        """
-        Renders and prints the rarity bonus for different exponents and counts.
-        Useful for comparing how exponent affects incentives.
-        """
-        print(f"Bonus Comparison (Beta={beta}, Max Multiplier={max_multiplier})")
-        print("=" * 60)
+    # def render_bonus_comparison(exponents: list, counts: list, beta: float = 1.0, max_multiplier: float = 3.0):
+    #     """
+    #     Renders and prints the rarity bonus for different exponents and counts.
+    #     Useful for comparing how exponent affects incentives.
+    #     """
+    #     print(f"Bonus Comparison (Beta={beta}, Max Multiplier={max_multiplier})")
+    #     print("=" * 60)
         
-        for exp in exponents:
-            print(f"\nExponent: {exp}")
-            print("-" * 30)
-            for count in counts:
-                vmrs = 1.0 / count
-                bonus = min(1.0 + beta * (vmrs ** exp), max_multiplier)
-                print(f"  Count {count:>3}: VMRS {vmrs:>6.4f}, Bonus {bonus:>5.3f}x")
+    #     for exp in exponents:
+    #         print(f"\nExponent: {exp}")
+    #         print("-" * 30)
+    #         for count in counts:
+    #             vmrs = 1.0 / count
+    #             bonus = min(1.0 + beta * (vmrs ** exp), max_multiplier)
+    #             print(f"  Count {count:>3}: VMRS {vmrs:>6.4f}, Bonus {bonus:>5.3f}x")
     
     
     
@@ -256,9 +264,9 @@ if __name__ == "__main__":
     engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=3.0)
     RarityTier.print_tiers()
 
-    html_tiers = RarityTier.print_tiers_html()
-    print("\nHTML Tier Representation:")
-    print(html_tiers)
+    # html_tiers = RarityTier.print_tiers_html()
+    # print("\nHTML Tier Representation:")
+    # print(html_tiers)
 
     # Simulate 1000+ miners
     miners = {

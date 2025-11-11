@@ -1,4 +1,6 @@
+import json
 from enum import Enum
+
 
 class RarityTier(Enum):
     COMMON = "Common"
@@ -9,9 +11,10 @@ class RarityTier(Enum):
     LEGENDARY = "Legendary"
 
 
-    def get_tier_multiplier(tier: 'RarityTier') -> float:
-        """Return a multiplier for the tier."""
-        multipliers = {
+    @staticmethod
+    def get_multipliers():
+        """Main Scoring Multipliers"""
+        return {
             RarityTier.COMMON: 1.0,
             RarityTier.UNCOMMON: 1.05,
             RarityTier.RARE: 1.1,
@@ -19,7 +22,13 @@ class RarityTier(Enum):
             RarityTier.UNIQUE: 1.90,
             RarityTier.LEGENDARY: 3.0
         }
+
+
+    def get_tier_multiplier(tier: 'RarityTier') -> float:
+        """Return a multiplier for the tier."""
+        multipliers = RarityTier.get_multipliers()              
         return multipliers.get(tier, 1.0)
+    
 
     @staticmethod
     def get_tier_icon(tier: 'RarityTier') -> str:
@@ -34,11 +43,17 @@ class RarityTier(Enum):
         }
         return icons.get(tier, "\033[91m?\033[0m")  # Red ? for unknown
     
+    
     @staticmethod
     def print_tiers() -> None:
         for tier in RarityTier:
             icon = RarityTier.get_tier_icon(tier)
             print(f"{icon} {tier.value}")
+
+        multipliers = RarityTier.get_multipliers()
+        mp = json.dumps({tier.value: mult for tier, mult in multipliers.items()}, indent=2)
+        print(f"Tier Multipliers: {mp}")
+
 
     @staticmethod
     def get_html_color(tier: 'RarityTier') -> str:
@@ -52,6 +67,7 @@ class RarityTier(Enum):
             RarityTier.LEGENDARY: "darkorange"
         }
         return colors.get(tier, "red")  # Red for unknown
+    
    
     @staticmethod
     def print_tiers_html() -> str:
