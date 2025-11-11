@@ -127,9 +127,9 @@ class DiversityIncentiveEngine:
         # Percentile based on rank
         percentile = (rank - 1) / (num_unique - 1) if num_unique > 1 else 0
         
-        if percentile <= 0.01:
+        if percentile <= 0.009:
             return RarityTier.LEGENDARY
-        elif percentile <= 0.1:
+        elif percentile <= 0.09:
             return RarityTier.UNIQUE
         elif percentile <= 0.25:
             return RarityTier.EPIC
@@ -205,12 +205,7 @@ class DiversityIncentiveEngine:
         #report_lines.append(f"Parameters: Beta={self.beta}, Exponent={self.exponent}, Max Multiplier={self.max_multiplier}")
         report_lines.append(f"Parameters: Max Multiplier={self.max_multiplier}")
         report_lines.append(f"{'='*len(header)}")
-
-        # In generate_epoch_report, change the multipliers JSON dump to handle enum keys
-        # multipliers = RarityTier.get_multipliers()
-        # mp = json.dumps({tier.value: mult for tier, mult in multipliers.items()}, indent=2)
-        # report_lines.append(f"Tier Multipliers: {mp}")
-
+       
         report_lines.append(f"{'='*len(header)}")
         report_lines.append(header)
         report_lines.append(separator)
@@ -235,23 +230,6 @@ class DiversityIncentiveEngine:
     def print_epoch_report(self):
         report = self.generate_epoch_report()
         print(report)
-    
-    
-    # def render_bonus_comparison(exponents: list, counts: list, beta: float = 1.0, max_multiplier: float = 3.0):
-    #     """
-    #     Renders and prints the rarity bonus for different exponents and counts.
-    #     Useful for comparing how exponent affects incentives.
-    #     """
-    #     print(f"Bonus Comparison (Beta={beta}, Max Multiplier={max_multiplier})")
-    #     print("=" * 60)
-        
-    #     for exp in exponents:
-    #         print(f"\nExponent: {exp}")
-    #         print("-" * 30)
-    #         for count in counts:
-    #             vmrs = 1.0 / count
-    #             bonus = min(1.0 + beta * (vmrs ** exp), max_multiplier)
-    #             print(f"  Count {count:>3}: VMRS {vmrs:>6.4f}, Bonus {bonus:>5.3f}x")
     
     
     
@@ -301,16 +279,16 @@ if __name__ == "__main__":
     for i in range(1051, 1081):
         engine.submit_proof(f"m{i}", "gemma-2b", base_reward=1.0)
 
-    # Rare models
-    engine.submit_proof("m1081", "phi-3-mini")
+    
+    engine.submit_proof("m1081", "phi-3-mini") #epic
     engine.submit_proof("m1082", "phi-3-mini")
     engine.submit_proof("m1083", "phi-3-mini")
 
-    engine.submit_proof("m2000", "qwen-1.5b-v2")  # Only one!
-    engine.submit_proof("m2000", "qwen-1.5b-v2")  # Only one!
-    engine.submit_proof("m2001", "solar-10.7b")  # Only one!
+    engine.submit_proof("m2000", "qwen-1.5b-v2") #unique  
+    engine.submit_proof("m2000", "qwen-1.5b-v2")
 
     # Add more ultra-rare models to trigger UNIQUE tier
+    engine.submit_proof("m2001", "solar-10.7b")
     engine.submit_proof("m3000", "claude-3-haiku")  # Only one!
     engine.submit_proof("m3001", "deepseek-v3")     # Only one!
     engine.submit_proof("m3002", "o1-mini")         # Only one!
