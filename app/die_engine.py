@@ -75,35 +75,13 @@ class DiversityIncentiveEngine:
             miner_id = record.get("hotkey", "")
             model_name = record.get("model", "unknown")    
             normalized_model = self.normalize_model_name(model_name)
-            self.submit_proof(miner_id, normalized_model)    
-
-    # def get_miner_class(self, miner_id: str) -> str:
-    #     """Derive miner's class based on their model usage history, with weighted scoring for higher tiers."""
-    #     miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
-    #     if not miner_proofs:
-    #         return "Warrior"  # Default for new miners
-        
-    #     # Weighted scores: higher tiers give more points to their classes
-    #     scores = {"Warrior": 0, "Mage": 0, "Rogue": 0}
-    #     for proof in miner_proofs:
-    #         tier = self.get_rarity_tier(proof.model_name)
-    #         if tier == RarityTier.COMMON:
-    #             scores["Warrior"] += 1
-    #         elif tier == RarityTier.UNCOMMON:
-    #             scores["Warrior"] += 0.5  # Less weight for mid-common
-    #         elif tier == RarityTier.RARE:
-    #             scores["Rogue"] += 1
-    #         elif tier == RarityTier.EPIC:
-    #             scores["Rogue"] += 1.5  # More weight for higher mid-rare
-    #         elif tier == RarityTier.UNIQUE:
-    #             scores["Mage"] += 1.5
-    #         elif tier == RarityTier.LEGENDARY:
-    #             scores["Mage"] += 2  # Highest weight for rarest
-    
-    #     # Return class with highest score
-    #     return max(scores, key=scores.get)
+            self.submit_proof(miner_id, normalized_model)
+   
     
     def get_miner_class(self, miner_id: str) -> str:
+        """
+        Derive miner's class based on the entropy of their model usage history.
+        """
         miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
         proof_count = len(miner_proofs)
         
@@ -226,7 +204,7 @@ class DiversityIncentiveEngine:
         for miner_id in all_miners:
             mclass = self.get_miner_class(miner_id)
             miner_classes.append({
-                "miner_id": miner_id,
+                "miner_hotkey": miner_id,
                 "class": mclass,
                 "proofs": len([p for p in self.proofs if p.miner_id == miner_id]),
                 "created_at": datetime.now(timezone.utc).isoformat()
@@ -237,7 +215,7 @@ class DiversityIncentiveEngine:
                 "network": self.bt_network,
                 "netuid": self.bt_netuid,
                 "total_miners": len(all_miners),
-                "miner_classes": miner_classes
+                "miners": miner_classes
             }
         }
         return report_dict
