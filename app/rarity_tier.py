@@ -33,10 +33,10 @@ class RarityTier(Enum):
         """Return a colored Unicode icon for the tier using ANSI escape codes."""
         icons = {
             RarityTier.COMMON: "\033[90m●\033[0m",          # Gray circle
-            RarityTier.MAGIC: "\033[32m●\033[0m",        # Green circle
+            RarityTier.MAGIC: "\033[34m●\033[0m",        # Blue circle
             RarityTier.RARE: "\033[35m●\033[0m",            # Purple circle                        
             RarityTier.LEGENDARY: "\033[38;5;208m♦\033[0m",  # Orange star
-            RarityTier.UNIQUE: "\033[33m★\033[0m"          # Yellow diamond
+            RarityTier.UNIQUE: "\033[1;33m★\033[0m"          # Yellow diamond
         }
         return icons.get(tier, "\033[91m?\033[0m")  # Red ? for unknown
     
@@ -57,7 +57,7 @@ class RarityTier(Enum):
         """Return the HTML color code for the tier."""
         colors = {
             RarityTier.COMMON: "gray",
-            RarityTier.MAGIC: "green",
+            RarityTier.MAGIC: "blue",
             RarityTier.RARE: "purple",                        
             RarityTier.LEGENDARY: "darkorange",
             RarityTier.UNIQUE: "gold"
