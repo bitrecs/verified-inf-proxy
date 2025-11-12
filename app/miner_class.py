@@ -1,14 +1,3 @@
-
-# MINER_CLASS_DESCRIPTIONS = {
-#     "Novice": "New or inactive miners with fewer than 10 proofs, representing beginners who haven't contributed enough to classify by behavior.",
-#     "Monk": "Low-diversity miners (entropy ≤ 0.3) who stick mostly to one or few models, rewarding deep focus and consistency.",
-#     "Ranger": "Balanced miners (0.3 < entropy ≤ 0.7) with moderate diversity, using a mix of models flexibly without extreme focus or spread.",
-#     "Sorcerer": "High-diversity miners (entropy > 0.7) who use many different models evenly, encouraging broad exploration and discovery of rare models."
-# }
-
-
-
-
 from enum import Enum
 
 
@@ -21,11 +10,20 @@ CLASS_COLOR_MAPPING = {
 
 
 MINER_CLASS_DESCRIPTIONS = {
-    "Novice": "Novice with <10 proofs, not yet classified by behavior.",
-    "Monk": "Focused miners (entropy ≤0.3) using few models for consistency.",
-    "Ranger": "Balanced miners (0.3<entropy≤0.7) with moderate model variety.",
-    "Sorcerer": "Diverse miners (entropy>0.7) exploring many models for discovery."
+    "Novice": "Novice with <10 proofs",
+    "Monk": "Focused miners using few models for consistency.",
+    "Ranger": "Balanced miners with moderate model variety.",
+    "Sorcerer": "Diverse miners exploring many models."
 }
+
+
+MINER_CLASS_DESCRIPTIONS_EXTENDED = {
+    "Novice": "New miners with fewer than 10 proofs, representing new adventurers.",
+    "Monk": "Low-diversity miners (entropy ≤ 0.3) who stick mostly to one or few models, rewarding deep focus and consistency.",
+    "Ranger": "Balanced miners (0.3 < entropy ≤ 0.7) with moderate diversity, using a mix of models flexibly without extreme focus or spread.",
+    "Sorcerer": "High-diversity miners (entropy > 0.7) who use many different models evenly, encouraging broad exploration and discovery of rare models."
+}
+
 
 
 class MinerClass(Enum):
@@ -40,7 +38,7 @@ class MinerClass(Enum):
             return MinerClass.NOVICE
         elif entropy > 0.7:
             return MinerClass.SORCERER
-        elif entropy > 0.3: 
+        elif entropy > 0.3:
             return MinerClass.RANGER
         else:
             return MinerClass.MONK

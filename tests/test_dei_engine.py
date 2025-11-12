@@ -21,7 +21,7 @@ def test_load_from_db():
 
 def test_rarity_tiers():
     common = RarityTier.get_tier_icon(RarityTier.COMMON)
-    uncommon = RarityTier.get_tier_icon(RarityTier.UNCOMMON)
+    uncommon = RarityTier.get_tier_icon(RarityTier.MAGIC)
     rare = RarityTier.get_tier_icon(RarityTier.RARE)
     epic = RarityTier.get_tier_icon(RarityTier.EPIC)
     unique = RarityTier.get_tier_icon(RarityTier.UNIQUE)

@@ -156,15 +156,13 @@ class DiversityIncentiveEngine:
         percentile = (rank - 1) / (num_unique - 1) if num_unique > 1 else 0
         
         if percentile <= 0.009:
-            return RarityTier.LEGENDARY
-        elif percentile <= 0.09:
             return RarityTier.UNIQUE
+        elif percentile <= 0.09:
+            return RarityTier.LEGENDARY
         elif percentile <= 0.25:
-            return RarityTier.EPIC
-        elif percentile <= 0.5:
-            return RarityTier.RARE
+            return RarityTier.RARE        
         elif percentile <= 0.75:
-            return RarityTier.UNCOMMON
+            return RarityTier.MAGIC
         else:
             return RarityTier.COMMON
    
@@ -395,6 +393,6 @@ if __name__ == "__main__":
     #json_report = engine.generate_rarity_report_json()
     #print(json.dumps(json_report, indent=2))  # Pretty-print for testing
 
-    miner_class_report = engine.generate_miner_class_report_json()
-    print("\nMiner Class Report:")
-    print(json.dumps(miner_class_report, indent=2))
+    # miner_class_report = engine.generate_miner_class_report_json()
+    # print("\nMiner Class Report:")
+    # print(json.dumps(miner_class_report, indent=2))
