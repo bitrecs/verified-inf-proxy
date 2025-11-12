@@ -10,7 +10,11 @@ class HTMLLog:
     @staticmethod
     def render_verified_display(verified: List[Dict[str, Any]], bt_network: str, bt_netuid: int, die_engine: DiversityIncentiveEngine) -> str:
         """Render the verified responses display page."""
-        rows_html = ""
+        # Cache for rarity tiers to avoid repeated calls
+        rarity_cache = {}
+        
+        # Build rows HTML with list for efficiency
+        rows_html_list = []
         miners = set()
         for item in verified:
             timestamp = item.get('timestamp', 'N/A')
@@ -19,14 +23,17 @@ class HTMLLog:
             duration = item.get('duration', 'N/A') or 'N/A'
             signature = item.get('signature', 'N/A')
             provider = item.get('provider', 'N/A')
-            miners.add(hotkey)           
+            miners.add(hotkey)
             
             # Parse response_json to extract content
             response_content = 'N/A'
             miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
             
             try:
-                tier = die_engine.get_rarity_tier(model)  
+                # Cache rarity tier
+                if model not in rarity_cache:
+                    rarity_cache[model] = die_engine.get_rarity_tier(model)
+                tier = rarity_cache[model]
                 tier_color = RarityTier.get_html_color(tier)
             
                 response_data = json.loads(item.get('completion_response', '{}'))
@@ -55,7 +62,8 @@ class HTMLLog:
             escaped_duration = html.escape(str(duration))
             escaped_signature = html.escape(str(signature))
 
-            rows_html += f"""
+            # Append to list instead of concatenating strings
+            rows_html_list.append(f"""
                         <tr>
                             <td data-label="{html.escape('Timestamp')}" class="timestamp">{escaped_timestamp}</td>
                             <td data-label="{html.escape('Hotkey')}" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{escaped_hotkey}</a></td>
@@ -65,7 +73,10 @@ class HTMLLog:
                             <td data-label="{html.escape('Duration')}" class="duration">{escaped_duration}s</td>
                             <td data-label="{html.escape('Signature')}" class="signature">{escaped_signature}</td>
                         </tr>
-            """
+            """)
+        
+        # Join the list into a single string
+        rows_html = ''.join(rows_html_list)
 
         # Escape header data as well
         escaped_bt_network = html.escape(str(bt_network))

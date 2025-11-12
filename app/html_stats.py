@@ -35,10 +35,6 @@ class HTMLStats:
             provider = item.get('provider', 'N/A')
             model = item.get('model', 'N/A')
             signature = item.get('signature', 'N/A')
-            miner_class = die_engine.get_miner_class(hotkey)
-            mc = MinerClass(miner_class)
-            miner_class_icon = MinerClass.get_class_icon(mc)
-            miner_class_color = MinerClass.get_color_code(mc)         
             
             stats = hotkey_stats[hotkey]
             stats['total_responses'] += 1
@@ -48,31 +44,44 @@ class HTMLStats:
                 stats['last_timestamp'] = timestamp
             stats['providers'].add(provider)
             stats['models'].add(model)
-            stats['signatures'].append(signature)            
-            stats['miner_class'] = f'<span style="color: #{miner_class_color};" title="{miner_class}">{miner_class} {miner_class_icon}</span>'
+            stats['signatures'].append(signature)
         
-        # Build rows HTML
-        rows_html = ""
+        # Cache for rarity tiers to avoid repeated calls
+        rarity_cache = {}
+        
+        # Build rows HTML with list for efficiency
+        rows_html_list = []
         for hotkey, stats in hotkey_stats.items():
+            # Compute miner class once per hotkey (moved here)
+            miner_class = die_engine.get_miner_class(hotkey)
+            mc = MinerClass(miner_class)
+            miner_class_icon = MinerClass.get_class_icon(mc)
+            miner_class_color = MinerClass.get_color_code(mc)
+            stats['miner_class'] = f'<span style="color: #{miner_class_color};" title="{miner_class}">{miner_class} {miner_class_icon}</span>'
+            
             avg_duration = stats['total_duration'] / stats['total_responses'] if stats['total_responses'] > 0 else 0.0
             providers_str = '<br> '.join(sorted(stats['providers']))
-            #models_str = '<br> '.join(sorted(stats['models']))
+            
+            # Build models_str with cached rarity
             models_str = ""
             for model in stats['models']:
-                tier = die_engine.get_rarity_tier(model)  # Update model count for rarity engine
+                if model not in rarity_cache:
+                    rarity_cache[model] = die_engine.get_rarity_tier(model)
+                tier = rarity_cache[model]
                 tier_color = RarityTier.get_html_color(tier)
                 escaped_model = html.escape(model)
                 models_str += f'<span style="color: {tier_color};" title="{tier.name}">{escaped_model}</span><br> '
             models_str = models_str.rstrip('<br> ')
             
-            miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"            
+            miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
             
             escaped_hotkey = html.escape(str(hotkey))
             escaped_total_responses = html.escape(str(stats['total_responses']))
             escaped_avg_duration = html.escape(f"{avg_duration:.2f}")
-            escaped_last_timestamp = html.escape(str(stats['last_timestamp']))            
+            escaped_last_timestamp = html.escape(str(stats['last_timestamp']))
             
-            rows_html += f"""
+            # Append to list instead of concatenating strings
+            rows_html_list.append(f"""
                         <tr>
                             <td data-label="{html.escape('Hotkey')}" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{escaped_hotkey}</a></td>
                             <td data-label="{html.escape('Total Responses')}" class="model">{escaped_total_responses}</td>
@@ -82,7 +91,10 @@ class HTMLStats:
                             <td data-label="{html.escape('Models')}" class="model">{models_str}</td>
                             <td data-label="{html.escape('Class')}" class="model">{stats['miner_class']}</td>
                         </tr>
-            """
+            """)
+        
+        # Join the list into a single string
+        rows_html = ''.join(rows_html_list)
         
         # Escape header data as well
         escaped_bt_network = html.escape(str(bt_network))

@@ -371,7 +371,7 @@ async def verified_statspg(request: Request):
         if not DATABASE_URL:
             return HTMLResponse(content="<pre>no db</pre>")
         handler = PGHandler(DATABASE_URL)
-        verified = handler.select_signed_responses_stats(limit=5_000)
+        verified = handler.select_signed_responses_stats(limit=10_000)
         since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
         app.state.dei_engine.load_proofs_from_db(since_date)
         html_content = HTMLStats.render_verified_stats(
