@@ -47,3 +47,5 @@ class Proof:
     model_name: str
     base_reward: float
     timestamp: float
+
+

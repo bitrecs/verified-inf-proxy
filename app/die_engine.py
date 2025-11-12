@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from app.models import Proof
 from app.pg_helper import PGHandler
 from app.rarity_tier import RarityTier
+from app.miner_class import MinerClass
 
 
 """
@@ -85,11 +86,10 @@ class DiversityIncentiveEngine:
         miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
         proof_count = len(miner_proofs)
         
-        # Novice: Very few proofs (e.g., <10 absolute for new/joiners in 7-day window)
+        # Novice: fewer than 10 proofs
         if proof_count < 10:
-            return "Novice"  # New or inactive miners
+            return "Novice"  # New or inactive miners        
         
-        # Existing entropy-based logic for active miners
         model_counts = defaultdict(int)
         for proof in miner_proofs:
             model_counts[proof.model_name] += 1
@@ -100,11 +100,21 @@ class DiversityIncentiveEngine:
         
         normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
         if normalized_entropy > 0.7:
-            return "Sorcerer"  # High diversity: masters many "spells" (models)
+            return MinerClass.SORCERER.value
+            #return "Sorcerer"  # High diversity: masters many (models)
         elif normalized_entropy > 0.3:
-            return "Ranger"    # Balanced: versatile explorer
+            return MinerClass.RANGER.value
+            #return "Ranger"    # Balanced: versatile explorer
         else:
-            return "Monk"      # Low diversity: focused disciple
+            return MinerClass.MONK.value
+            #return "Monk"      # Low diversity: focused disciple
+        
+    # MINER_CLASS_DESCRIPTIONS = {
+    #     "Novice": "New or inactive miners with fewer than 10 proofs, representing beginners who haven't contributed enough to classify by behavior.",
+    #     "Sorcerer": "High-diversity miners (entropy > 0.7) who use many different models evenly, encouraging broad exploration and discovery of rare models.",
+    #     "Ranger": "Balanced miners (0.3 < entropy ≤ 0.7) with moderate diversity, using a mix of models flexibly without extreme focus or spread.",
+    #     "Monk": "Low-diversity miners (entropy ≤ 0.3) who stick mostly to one or few models, rewarding deep focus and consistency."
+    # }
 
 
     def get_rarity_bonus(self, model_name: str) -> float:
@@ -203,9 +213,14 @@ class DiversityIncentiveEngine:
         miner_classes = []
         for miner_id in all_miners:
             mclass = self.get_miner_class(miner_id)
+            class_color_code = MinerClass.get_color_code(MinerClass[mclass.upper()])
+            class_icon = MinerClass.get_class_icon(MinerClass[mclass.upper()])
+
             miner_classes.append({
                 "miner_hotkey": miner_id,
                 "class": mclass,
+                "class_icon": class_icon,
+                "class_color": class_color_code,
                 "proofs": len([p for p in self.proofs if p.miner_id == miner_id]),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
