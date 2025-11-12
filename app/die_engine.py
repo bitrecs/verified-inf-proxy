@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from app.models import Proof
 from app.pg_helper import PGHandler
 from app.rarity_tier import RarityTier
+from app.miner_class import MinerClass
 
 
 """
@@ -85,11 +86,10 @@ class DiversityIncentiveEngine:
         miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
         proof_count = len(miner_proofs)
         
-        # Novice: Very few proofs (e.g., <10 absolute for new/joiners in 7-day window)
+        # Novice: fewer than 10 proofs
         if proof_count < 10:
-            return "Novice"  # New or inactive miners
+            return MinerClass.NOVICE.value
         
-        # Existing entropy-based logic for active miners
         model_counts = defaultdict(int)
         for proof in miner_proofs:
             model_counts[proof.model_name] += 1
@@ -100,12 +100,12 @@ class DiversityIncentiveEngine:
         
         normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
         if normalized_entropy > 0.7:
-            return "Sorcerer"  # High diversity: masters many "spells" (models)
+            return MinerClass.SORCERER.value            
         elif normalized_entropy > 0.3:
-            return "Ranger"    # Balanced: versatile explorer
+            return MinerClass.RANGER.value            
         else:
-            return "Monk"      # Low diversity: focused disciple
-
+            return MinerClass.MONK.value            
+   
 
     def get_rarity_bonus(self, model_name: str) -> float:
         """Calculate bonus based on rarity tier, not VMRS, to differentiate rewards."""
@@ -146,15 +146,13 @@ class DiversityIncentiveEngine:
         percentile = (rank - 1) / (num_unique - 1) if num_unique > 1 else 0
         
         if percentile <= 0.009:
-            return RarityTier.LEGENDARY
-        elif percentile <= 0.09:
             return RarityTier.UNIQUE
+        elif percentile <= 0.09:
+            return RarityTier.LEGENDARY
         elif percentile <= 0.25:
-            return RarityTier.EPIC
-        elif percentile <= 0.5:
-            return RarityTier.RARE
+            return RarityTier.RARE        
         elif percentile <= 0.75:
-            return RarityTier.UNCOMMON
+            return RarityTier.MAGIC
         else:
             return RarityTier.COMMON
    
@@ -203,9 +201,14 @@ class DiversityIncentiveEngine:
         miner_classes = []
         for miner_id in all_miners:
             mclass = self.get_miner_class(miner_id)
+            class_color_code = MinerClass.get_color_code(MinerClass[mclass.upper()])
+            class_icon = MinerClass.get_class_icon(MinerClass[mclass.upper()])
+
             miner_classes.append({
                 "miner_hotkey": miner_id,
                 "class": mclass,
+                "class_icon": class_icon,
+                "class_color": class_color_code,
                 "proofs": len([p for p in self.proofs if p.miner_id == miner_id]),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
@@ -231,7 +234,8 @@ class DiversityIncentiveEngine:
         proof = miner_proofs[-1]
         multiplier = self.get_rarity_bonus(proof.model_name)
         final = proof.base_reward * multiplier
-        return final, multiplier, proof.model_name        
+        return final, multiplier, proof.model_name
+    
 
     def generate_epoch_report(self) -> str:        
         max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
@@ -279,9 +283,20 @@ if __name__ == "__main__":
 # ==========================
 # DEMO: Simulate an epoch
 # ==========================
-
+    print("World of Bitrecs")
+    print("=================")
+    print("ITEM TIERS")
     engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=3.0)
     RarityTier.print_tiers()
+
+    print("\nMINER CLASSES")
+    novice_info = MinerClass.get_class_info(MinerClass.NOVICE)
+    monk_info = MinerClass.get_class_info(MinerClass.MONK)
+    ranger_info = MinerClass.get_class_info(MinerClass.RANGER)
+    sorcerer_info = MinerClass.get_class_info(MinerClass.SORCERER)
+    for info in [novice_info, monk_info, ranger_info, sorcerer_info]:
+        print(f"{info['icon']} {info['name']} (Color: #{info['color_code']}) - {info['description']}")
+        print(f"  Extended: {info['extended_description']}\n")
 
     # html_tiers = RarityTier.print_tiers_html()
     # print("\nHTML Tier Representation:")
@@ -380,6 +395,6 @@ if __name__ == "__main__":
     #json_report = engine.generate_rarity_report_json()
     #print(json.dumps(json_report, indent=2))  # Pretty-print for testing
 
-    miner_class_report = engine.generate_miner_class_report_json()
-    print("\nMiner Class Report:")
-    print(json.dumps(miner_class_report, indent=2))
+    # miner_class_report = engine.generate_miner_class_report_json()
+    # print("\nMiner Class Report:")
+    # print(json.dumps(miner_class_report, indent=2))

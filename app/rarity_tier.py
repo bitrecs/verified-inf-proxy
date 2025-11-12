@@ -4,11 +4,10 @@ from enum import Enum
 
 class RarityTier(Enum):
     COMMON = "Common"
-    UNCOMMON = "Uncommon"
-    RARE = "Rare"
-    EPIC = "Epic"
-    UNIQUE = "Unique"
+    MAGIC = "Magic"
+    RARE = "Rare"      
     LEGENDARY = "Legendary"
+    UNIQUE = "Unique"
 
 
     @staticmethod
@@ -16,11 +15,10 @@ class RarityTier(Enum):
         """Main Scoring Multipliers"""
         return {
             RarityTier.COMMON: 1.0,
-            RarityTier.UNCOMMON: 1.05,
+            RarityTier.MAGIC: 1.05,
             RarityTier.RARE: 1.1,
-            RarityTier.EPIC: 1.5,
-            RarityTier.UNIQUE: 1.90,
-            RarityTier.LEGENDARY: 3.0
+            RarityTier.LEGENDARY: 1.9,
+            RarityTier.UNIQUE: 3.0
         }
 
 
@@ -35,11 +33,10 @@ class RarityTier(Enum):
         """Return a colored Unicode icon for the tier using ANSI escape codes."""
         icons = {
             RarityTier.COMMON: "\033[90m●\033[0m",          # Gray circle
-            RarityTier.UNCOMMON: "\033[32m●\033[0m",        # Green circle
-            RarityTier.RARE: "\033[34m●\033[0m",            # Blue circle
-            RarityTier.EPIC: "\033[35m●\033[0m",            # Purple circle
-            RarityTier.UNIQUE: "\033[33m♦\033[0m",          # Yellow diamond
-            RarityTier.LEGENDARY: "\033[38;5;208m★\033[0m"  # Orange star
+            RarityTier.MAGIC: "\033[34m●\033[0m",        # Blue circle
+            RarityTier.RARE: "\033[35m●\033[0m",            # Purple circle                        
+            RarityTier.LEGENDARY: "\033[38;5;208m♦\033[0m",  # Orange star
+            RarityTier.UNIQUE: "\033[1;33m★\033[0m"          # Yellow diamond
         }
         return icons.get(tier, "\033[91m?\033[0m")  # Red ? for unknown
     
@@ -60,11 +57,10 @@ class RarityTier(Enum):
         """Return the HTML color code for the tier."""
         colors = {
             RarityTier.COMMON: "gray",
-            RarityTier.UNCOMMON: "green",
-            RarityTier.RARE: "blue",
-            RarityTier.EPIC: "purple",
-            RarityTier.UNIQUE: "orange",
-            RarityTier.LEGENDARY: "darkorange"
+            RarityTier.MAGIC: "blue",
+            RarityTier.RARE: "purple",                        
+            RarityTier.LEGENDARY: "darkorange",
+            RarityTier.UNIQUE: "gold"
         }
         return colors.get(tier, "red")  # Red for unknown
     
@@ -77,20 +73,17 @@ class RarityTier(Enum):
             if tier == RarityTier.COMMON:
                 color = "gray"
                 symbol = "●"
-            elif tier == RarityTier.UNCOMMON:
-                color = "green"
-                symbol = "●"
-            elif tier == RarityTier.RARE:
+            elif tier == RarityTier.MAGIC:
                 color = "blue"
                 symbol = "●"
-            elif tier == RarityTier.EPIC:
+            elif tier == RarityTier.RARE:
                 color = "purple"
                 symbol = "●"
-            elif tier == RarityTier.UNIQUE:
-                color = "orange"
-                symbol = "♦"
             elif tier == RarityTier.LEGENDARY:
                 color = "darkorange"
+                symbol = "♦"
+            elif tier == RarityTier.UNIQUE:
+                color = "gold"
                 symbol = "★"
             else:
                 color = "red"
