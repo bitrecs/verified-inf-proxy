@@ -3,6 +3,7 @@ import json
 from typing import List, Dict, Any
 from collections import defaultdict
 from app.die_engine import DiversityIncentiveEngine
+from app.miner_class import MinerClass
 from app.rarity_tier import RarityTier
 
 
@@ -34,6 +35,9 @@ class HTMLStats:
             provider = item.get('provider', 'N/A')
             model = item.get('model', 'N/A')
             signature = item.get('signature', 'N/A')
+            miner_class = die_engine.get_miner_class(hotkey)
+            mc = MinerClass(miner_class)
+            miner_class_icon = MinerClass.get_class_icon(mc)
          
             
             stats = hotkey_stats[hotkey]
@@ -45,6 +49,7 @@ class HTMLStats:
             stats['providers'].add(provider)
             stats['models'].add(model)
             stats['signatures'].append(signature)
+            stats['miner_class'] = f"{miner_class} {miner_class_icon}"
         
         # Build rows HTML
         rows_html = ""
@@ -71,10 +76,11 @@ class HTMLStats:
                         <tr>
                             <td data-label="{html.escape('Hotkey')}" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{escaped_hotkey}</a></td>
                             <td data-label="{html.escape('Total Responses')}" class="model">{escaped_total_responses}</td>
-                            <td data-label="{html.escape('Avg Duration (s)')}" class="duration">{escaped_avg_duration}s</td>
+                            <td data-label="{html.escape('Duration')}" class="duration">{escaped_avg_duration}s</td>
                             <td data-label="{html.escape('Last Timestamp')}" class="timestamp">{escaped_last_timestamp}</td>
                             <td data-label="{html.escape('Providers')}" class="model">{providers_str}</td>
-                            <td data-label="{html.escape('Models')}" class="model">{models_str}</td>                            
+                            <td data-label="{html.escape('Models')}" class="model">{models_str}</td>
+                            <td data-label="{html.escape('Class')}" class="model">{stats['miner_class']}</td>
                         </tr>
             """
         
@@ -387,6 +393,7 @@ class HTMLStats:
                             <th>Last Timestamp</th>
                             <th>Providers</th>
                             <th>Models</th>
+                            <th>Class</th>
                             
                         </tr>
                     </thead>

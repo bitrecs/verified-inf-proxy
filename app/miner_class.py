@@ -10,10 +10,10 @@ CLASS_COLOR_MAPPING = {
 
 
 CLASS_ICON_MAPPING = {
-    "Novice": "\u001B[97m🔰\u001B[0m",
-    "Monk": "\u001B[91m🤛\u001B[0m",
-    "Ranger": "\u001B[92m🏹\u001B[0m",
-    "Sorcerer": "\u001B[94m⚡️\u001B[0m"
+    "Novice": "🔰",
+    "Monk": "🤛",
+    "Ranger": "🏹",
+    "Sorcerer": "⚡️"
 }
 
 MINER_CLASS_DESCRIPTIONS = {
