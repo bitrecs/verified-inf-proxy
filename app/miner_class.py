@@ -2,10 +2,17 @@ from enum import Enum
 
 
 CLASS_COLOR_MAPPING = {
-    "Novice": "C0C0C0",    # Grey plain Male for Novice
-    "Monk": "996633",      # Dark Brown Male Diablo2 Paladin 
-    "Ranger": "006600",    # Dark Green Female Diablo2 Amazon
-    "Sorcerer": "0000FF"   # Blue Female Diablo2 Sorcerer
+    "Novice": "C0C0C0", # Silver    
+    "Monk": "996633",   # Red
+    "Ranger": "006600", # Green    
+    "Sorcerer": "0000FF" # Blue   
+}
+
+CLASS_ICON_MAPPING = {
+    "Novice": "\u001B[97m🔰\u001B[0m",
+    "Monk": "\u001B[91m🤛\u001B[0m",
+    "Ranger": "\u001B[92m🏹\u001B[0m",
+    "Sorcerer": "\u001B[94m⚡️\u001B[0m"
 }
 
 
@@ -43,6 +50,7 @@ class MinerClass(Enum):
         else:
             return MinerClass.MONK
         
+    @staticmethod
     def get_color_code(miner_class: 'MinerClass') -> str:
         """Return the HTML color code for the miner class."""
         return CLASS_COLOR_MAPPING.get(miner_class.value, "000000")  # Default to black if unknown
@@ -50,13 +58,31 @@ class MinerClass(Enum):
     @staticmethod
     def get_class_icon(miner_class: 'MinerClass') -> str:
         """Return a colored Unicode icon for the miner class using ANSI escape codes."""
-        icons = {
-            MinerClass.NOVICE: "\033[90m♂\033[0m",     # Grey Male
-            MinerClass.MONK: "\033[33m♂\033[0m",       # Dark Brown Male
-            MinerClass.RANGER: "\033[32m♀\033[0m",     # Dark Green Female
-            MinerClass.SORCERER: "\033[34m♀\033[0m"    # Blue Female
+        return CLASS_ICON_MAPPING.get(miner_class.value, "\u001B[90m❓\u001B[0m")
+    
+    @staticmethod
+    def get_class_description(miner_class: 'MinerClass') -> str:
+        """Return a short description for the miner class."""
+        return MINER_CLASS_DESCRIPTIONS.get(miner_class.value, "Unknown class")
+    
+    @staticmethod
+    def get_class_description_extended(miner_class: 'MinerClass') -> str:
+        """Return an extended description for the miner class."""
+        return MINER_CLASS_DESCRIPTIONS_EXTENDED.get(miner_class.value, "No description available.")
+    
+    @staticmethod
+    def get_class_info(miner_class: 'MinerClass') -> dict:
+        """Return a dictionary with all info about the miner class."""
+        return {
+            "name": miner_class.value,
+            "color_code": MinerClass.get_color_code(miner_class),
+            "icon": MinerClass.get_class_icon(miner_class),
+            "description": MinerClass.get_class_description(miner_class),
+            "extended_description": MinerClass.get_class_description_extended(miner_class)
         }
-        return icons.get(miner_class, "\033[91m?\033[0m")  # Red ? for unknown  
+
+
+       
             
        
  

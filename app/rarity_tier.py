@@ -79,15 +79,12 @@ class RarityTier(Enum):
             elif tier == RarityTier.RARE:
                 color = "purple"
                 symbol = "●"
-            # elif tier == RarityTier.EPIC:
-            #     color = "purple"
-            #     symbol = "●"
             elif tier == RarityTier.LEGENDARY:
-                color = "darkorange"                
+                color = "darkorange"
                 symbol = "♦"
             elif tier == RarityTier.UNIQUE:
                 color = "gold"
-                symbol = "★"                
+                symbol = "★"
             else:
                 color = "red"
                 symbol = "?"

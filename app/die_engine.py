@@ -88,7 +88,7 @@ class DiversityIncentiveEngine:
         
         # Novice: fewer than 10 proofs
         if proof_count < 10:
-            return "Novice"  # New or inactive miners        
+            return MinerClass.NOVICE.value
         
         model_counts = defaultdict(int)
         for proof in miner_proofs:
@@ -100,22 +100,12 @@ class DiversityIncentiveEngine:
         
         normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
         if normalized_entropy > 0.7:
-            return MinerClass.SORCERER.value
-            #return "Sorcerer"  # High diversity: masters many (models)
+            return MinerClass.SORCERER.value            
         elif normalized_entropy > 0.3:
-            return MinerClass.RANGER.value
-            #return "Ranger"    # Balanced: versatile explorer
+            return MinerClass.RANGER.value            
         else:
-            return MinerClass.MONK.value
-            #return "Monk"      # Low diversity: focused disciple
-        
-    # MINER_CLASS_DESCRIPTIONS = {
-    #     "Novice": "New or inactive miners with fewer than 10 proofs, representing beginners who haven't contributed enough to classify by behavior.",
-    #     "Sorcerer": "High-diversity miners (entropy > 0.7) who use many different models evenly, encouraging broad exploration and discovery of rare models.",
-    #     "Ranger": "Balanced miners (0.3 < entropy ≤ 0.7) with moderate diversity, using a mix of models flexibly without extreme focus or spread.",
-    #     "Monk": "Low-diversity miners (entropy ≤ 0.3) who stick mostly to one or few models, rewarding deep focus and consistency."
-    # }
-
+            return MinerClass.MONK.value            
+   
 
     def get_rarity_bonus(self, model_name: str) -> float:
         """Calculate bonus based on rarity tier, not VMRS, to differentiate rewards."""
@@ -244,7 +234,8 @@ class DiversityIncentiveEngine:
         proof = miner_proofs[-1]
         multiplier = self.get_rarity_bonus(proof.model_name)
         final = proof.base_reward * multiplier
-        return final, multiplier, proof.model_name        
+        return final, multiplier, proof.model_name
+    
 
     def generate_epoch_report(self) -> str:        
         max_model_len = max(len(model) for model in self.model_count.keys()) if self.model_count else 20
@@ -292,9 +283,20 @@ if __name__ == "__main__":
 # ==========================
 # DEMO: Simulate an epoch
 # ==========================
-
+    print("World of Bitrecs")
+    print("=================")
+    print("ITEM TIERS")
     engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=3.0)
     RarityTier.print_tiers()
+
+    print("\nMINER CLASSES")
+    novice_info = MinerClass.get_class_info(MinerClass.NOVICE)
+    monk_info = MinerClass.get_class_info(MinerClass.MONK)
+    ranger_info = MinerClass.get_class_info(MinerClass.RANGER)
+    sorcerer_info = MinerClass.get_class_info(MinerClass.SORCERER)
+    for info in [novice_info, monk_info, ranger_info, sorcerer_info]:
+        print(f"{info['icon']} {info['name']} (Color: #{info['color_code']}) - {info['description']}")
+        print(f"  Extended: {info['extended_description']}\n")
 
     # html_tiers = RarityTier.print_tiers_html()
     # print("\nHTML Tier Representation:")
