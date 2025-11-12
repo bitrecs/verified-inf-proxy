@@ -199,6 +199,9 @@ class DiversityIncentiveEngine:
     def generate_miner_class_report_json(self) -> dict:
         all_miners = set(p.miner_id for p in self.proofs)
         miner_classes = []
+        days = self.active_date_range.days if self.active_date_range else "N/A"
+        dt_from = (datetime.now(timezone.utc) - self.active_date_range).isoformat() if self.active_date_range else "N/A"
+        
         for miner_id in all_miners:
             mclass = self.get_miner_class(miner_id)
             class_color_code = MinerClass.get_color_code(MinerClass[mclass.upper()])
@@ -217,6 +220,9 @@ class DiversityIncentiveEngine:
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "network": self.bt_network,
                 "netuid": self.bt_netuid,
+                "from": dt_from,
+                "to": datetime.now(timezone.utc).isoformat(),
+                "range": f"Last {days} days",
                 "total_miners": len(all_miners),
                 "miners": miner_classes
             }
