@@ -38,7 +38,7 @@ class HTMLStats:
             miner_class = die_engine.get_miner_class(hotkey)
             mc = MinerClass(miner_class)
             miner_class_icon = MinerClass.get_class_icon(mc)
-         
+            miner_class_color = MinerClass.get_color_code(mc)         
             
             stats = hotkey_stats[hotkey]
             stats['total_responses'] += 1
@@ -48,8 +48,8 @@ class HTMLStats:
                 stats['last_timestamp'] = timestamp
             stats['providers'].add(provider)
             stats['models'].add(model)
-            stats['signatures'].append(signature)
-            stats['miner_class'] = f"{miner_class} {miner_class_icon}"
+            stats['signatures'].append(signature)            
+            stats['miner_class'] = f'<span style="color: #{miner_class_color};" title="{miner_class}">{miner_class} {miner_class_icon}</span>'
         
         # Build rows HTML
         rows_html = ""
