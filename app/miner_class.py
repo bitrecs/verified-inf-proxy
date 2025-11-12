@@ -1,11 +1,10 @@
 from enum import Enum
 
-
 CLASS_COLOR_MAPPING = {
     "Novice": "C0C0C0", # Silver    
-    "Monk": "996633",   # Red
-    "Ranger": "006600", # Green    
-    "Sorcerer": "0000FF" # Blue   
+    "Monk": "D6133A",   # Red
+    "Ranger": "00E070", # Green    
+    "Sorcerer": "0066FF" # Blue   
 }
 
 CLASS_ICON_MAPPING = {
@@ -15,14 +14,12 @@ CLASS_ICON_MAPPING = {
     "Sorcerer": "\u001B[94m⚡️\u001B[0m"
 }
 
-
 MINER_CLASS_DESCRIPTIONS = {
     "Novice": "Novice with <10 proofs",
     "Monk": "Focused miners using few models for consistency.",
     "Ranger": "Balanced miners with moderate model variety.",
     "Sorcerer": "Diverse miners exploring many models."
 }
-
 
 MINER_CLASS_DESCRIPTIONS_EXTENDED = {
     "Novice": "New miners with fewer than 10 proofs, representing new adventurers.",
