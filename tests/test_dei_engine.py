@@ -21,16 +21,11 @@ def test_load_from_db():
 
 def test_rarity_tiers():
     common = RarityTier.get_tier_icon(RarityTier.COMMON)
-    uncommon = RarityTier.get_tier_icon(RarityTier.MAGIC)
-    rare = RarityTier.get_tier_icon(RarityTier.RARE)
-    epic = RarityTier.get_tier_icon(RarityTier.EPIC)
+    magic = RarityTier.get_tier_icon(RarityTier.MAGIC)
+    rare = RarityTier.get_tier_icon(RarityTier.RARE)    
     unique = RarityTier.get_tier_icon(RarityTier.UNIQUE)
-
-    print(f"Common tier icon: {common} (should be gray circle)")
-    print(f"Uncommon tier icon: {uncommon} (should be green circle)")
-    print(f"Rare tier icon: {rare} (should be blue circle)")
-    print(f"Epic tier icon: {epic} (should be purple circle)")
-    print(f"Unique tier icon: {unique} (should be orange star)")
+    legendary = RarityTier.get_tier_icon(RarityTier.LEGENDARY)
+    assert common != magic != rare != unique != legendary
 
 
     
