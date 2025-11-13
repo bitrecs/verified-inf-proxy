@@ -42,9 +42,9 @@ class MinerClass(Enum):
     def classify_miner(entropy: float, total_proofs: int):
         if total_proofs < 10:
             return MinerClass.NOVICE
-        elif entropy > 0.7:
+        elif entropy > 0.6:
             return MinerClass.SORCERER
-        elif entropy > 0.3:
+        elif entropy > 0.2:
             return MinerClass.RANGER
         else:
             return MinerClass.MONK
