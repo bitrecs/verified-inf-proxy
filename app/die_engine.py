@@ -134,7 +134,7 @@ class DiversityIncentiveEngine:
         
         num_unique = len(unique_counts)
         if num_unique == 1:
-            return RarityTier.LEGENDARY  # If only one count level, it's legendary
+            return RarityTier.UNIQUE
         
         # Find the rank of this count (1-based, rarest = 1)
         try:
@@ -147,10 +147,10 @@ class DiversityIncentiveEngine:
         
         if percentile <= 0.009:
             return RarityTier.UNIQUE
-        elif percentile <= 0.09:
+        elif percentile <= 0.10:
             return RarityTier.LEGENDARY
-        elif percentile <= 0.25:
-            return RarityTier.RARE        
+        elif percentile <= 0.20:
+            return RarityTier.RARE
         elif percentile <= 0.75:
             return RarityTier.MAGIC
         else:
