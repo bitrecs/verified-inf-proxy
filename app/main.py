@@ -640,7 +640,8 @@ async def forward_proxy_request(
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
         request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
-        response_hash = hashlib.sha256(response.content).hexdigest()        
+        response_data = response.json()
+        response_hash = hashlib.sha256(json.dumps(response_data, sort_keys=True).encode()).hexdigest()
         proof = {
             "request_hash": request_hash,
             "response_hash": response_hash,
@@ -673,7 +674,7 @@ async def forward_proxy_request(
         completion_tokens = 0
         total_tokens = 0
         try:
-            response_data = response.json()
+            #response_data = response.json()
             usage = response_data.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
