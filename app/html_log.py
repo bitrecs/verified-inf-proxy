@@ -3,6 +3,7 @@ import json
 from typing import List, Dict, Any
 from app.die_engine import DiversityIncentiveEngine
 from app.rarity_tier import RarityTier
+from app.utils import iso_to_relative_time
 
 
 class HTMLLog:
@@ -28,6 +29,8 @@ class HTMLLog:
             # Parse response_json to extract content
             response_content = 'N/A'
             miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
+
+            friendly_timestamp = iso_to_relative_time(timestamp)
             
             try:
                 # Cache rarity tier
@@ -65,7 +68,7 @@ class HTMLLog:
             # Append to list instead of concatenating strings
             rows_html_list.append(f"""
                         <tr>
-                            <td data-label="{html.escape('Timestamp')}" class="timestamp">{escaped_timestamp}</td>
+                            <td data-label="{html.escape('Timestamp')}" class="timestamp" title="{friendly_timestamp}">{escaped_timestamp}<br>{friendly_timestamp}</td>
                             <td data-label="{html.escape('Hotkey')}" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{escaped_hotkey}</a></td>
                             <td data-label="{html.escape('Model')}" class="model" title={tier.name}><span style="color: {tier_color};">{escaped_model}</span></td>
                             <td data-label="{html.escape('Provider')}" class="model">{escaped_provider}</td>

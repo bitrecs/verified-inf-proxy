@@ -1,10 +1,10 @@
 import html
-import json
 from typing import List, Dict, Any
 from collections import defaultdict
 from app.die_engine import DiversityIncentiveEngine
 from app.miner_class import MinerClass
 from app.rarity_tier import RarityTier
+from app.utils import iso_to_relative_time
 
 
 class HTMLStats:
@@ -32,6 +32,7 @@ class HTMLStats:
                 except ValueError:
                     duration = 0.0
             timestamp = item.get('timestamp', 'N/A')
+            friendly_timestamp = iso_to_relative_time(timestamp)
             provider = item.get('provider', 'N/A')
             model = item.get('model', 'N/A')
             signature = item.get('signature', 'N/A')
@@ -42,6 +43,7 @@ class HTMLStats:
             stats['durations'].append(duration)
             if stats['last_timestamp'] is None or timestamp > stats['last_timestamp']:
                 stats['last_timestamp'] = timestamp
+                stats['friendly_timestamp'] = friendly_timestamp
             stats['providers'].add(provider)
             stats['models'].add(model)
             stats['signatures'].append(signature)
@@ -57,7 +59,8 @@ class HTMLStats:
             mc = MinerClass(miner_class)
             miner_class_icon = MinerClass.get_class_icon(mc)
             miner_class_color = MinerClass.get_color_code(mc)
-            stats['miner_class'] = f'<span style="color: #{miner_class_color};" title="{miner_class}">{miner_class} {miner_class_icon}</span>'
+            miner_class_description = MinerClass.get_class_description(mc)
+            stats['miner_class'] = f'<span style="color: #{miner_class_color};" title="{miner_class_description}">{miner_class} {miner_class_icon}</span>'
             
             avg_duration = stats['total_duration'] / stats['total_responses'] if stats['total_responses'] > 0 else 0.0
             providers_str = '<br> '.join(sorted(stats['providers']))
@@ -79,6 +82,7 @@ class HTMLStats:
             escaped_total_responses = html.escape(str(stats['total_responses']))
             escaped_avg_duration = html.escape(f"{avg_duration:.2f}")
             escaped_last_timestamp = html.escape(str(stats['last_timestamp']))
+            escaped_friendly_timestamp = html.escape(str(stats.get('friendly_timestamp', 'N/A')))
             
             # Append to list instead of concatenating strings
             rows_html_list.append(f"""
@@ -86,7 +90,7 @@ class HTMLStats:
                             <td data-label="{html.escape('Hotkey')}" class="hotkey"><a href="{miner_url}" target="_blank" rel="noopener noreferrer">{escaped_hotkey}</a></td>
                             <td data-label="{html.escape('Total Responses')}" class="model">{escaped_total_responses}</td>
                             <td data-label="{html.escape('Duration')}" class="duration">{escaped_avg_duration}s</td>
-                            <td data-label="{html.escape('Last Timestamp')}" class="timestamp">{escaped_last_timestamp}</td>
+                            <td data-label="{html.escape('Timestamp')}" class="timestamp">{escaped_last_timestamp}<br>{escaped_friendly_timestamp}</td>
                             <td data-label="{html.escape('Providers')}" class="model">{providers_str}</td>
                             <td data-label="{html.escape('Models')}" class="model">{models_str}</td>
                             <td data-label="{html.escape('Class')}" class="model">{stats['miner_class']}</td>

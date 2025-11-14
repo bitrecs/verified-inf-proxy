@@ -4,6 +4,7 @@ import time
 import json
 import logging
 import hashlib
+from datetime import datetime, timezone
 from typing import List
 from app.models import SignedResponse
 from fiber import (
@@ -134,3 +135,47 @@ def verify_miner_request(hotkey: str, provider: str, nonce: str, signature: str,
     except Exception as e:
         logger.error(f"Signature verification failed: {e}")
         return False
+
+
+
+def iso_to_relative_time(iso_ts: str) -> str:
+    """
+    Convert an ISO 8601 timestamp to a relative time string like '10 minutes ago'.
+    Assumes the timestamp is in UTC and compares to current UTC time.
+    """
+    try:
+        # Parse the ISO timestamp (handles +00:00 or Z)
+        ts_dt = datetime.fromisoformat(iso_ts.replace('Z', '+00:00'))
+        if ts_dt.tzinfo is None:
+            ts_dt = ts_dt.replace(tzinfo=timezone.utc)
+        
+        # Get current UTC time
+        now = datetime.now(timezone.utc)
+        
+        # Calculate difference
+        diff = now - ts_dt
+        seconds = int(diff.total_seconds())
+        
+        if seconds < 0:
+            return "in the future"  # Handle future timestamps
+        
+        # Define time units
+        units = [
+            (31536000, "year"),
+            (2592000, "month"),  # Approximate
+            (86400, "day"),
+            (3600, "hour"),
+            (60, "minute"),
+            (1, "second")
+        ]
+        
+        for unit_seconds, unit_name in units:
+            if seconds >= unit_seconds:
+                count = seconds // unit_seconds
+                plural = "s" if count > 1 else ""
+                return f"{count} {unit_name}{plural} ago"
+        
+        return "just now"
+    except Exception as e:
+        logger.error(f"Error converting ISO timestamp {iso_ts}: {e}")
+        return iso_ts  # Fallback to original
