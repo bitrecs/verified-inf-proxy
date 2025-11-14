@@ -145,13 +145,24 @@ class DiversityIncentiveEngine:
         # Percentile based on rank
         percentile = (rank - 1) / (num_unique - 1) if num_unique > 1 else 0
         
-        if percentile <= 0.009:
+        # if percentile <= 0.009:
+        #     return RarityTier.UNIQUE
+        # elif percentile <= 0.10:
+        #     return RarityTier.LEGENDARY
+        # elif percentile <= 0.20:
+        #     return RarityTier.RARE
+        # elif percentile <= 0.75:
+        #     return RarityTier.MAGIC
+        # else:
+        #     return RarityTier.COMMON
+        
+        if percentile <= 0.01:
             return RarityTier.UNIQUE
-        elif percentile <= 0.10:
-            return RarityTier.LEGENDARY
         elif percentile <= 0.20:
+            return RarityTier.LEGENDARY
+        elif percentile <= 0.40:
             return RarityTier.RARE
-        elif percentile <= 0.75:
+        elif percentile <= 0.80:
             return RarityTier.MAGIC
         else:
             return RarityTier.COMMON
