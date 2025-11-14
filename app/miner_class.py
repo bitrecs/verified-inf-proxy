@@ -26,8 +26,8 @@ MINER_CLASS_DESCRIPTIONS = {
 MINER_CLASS_DESCRIPTIONS_EXTENDED = {
     "Novice": "New miners with fewer than 10 proofs, representing new adventurers.",
     "Monk": "Low-diversity miners (entropy ≤ 0.3) who stick mostly to one or few models, rewarding deep focus and consistency.",
-    "Ranger": "Balanced miners (0.3 < entropy ≤ 0.7) with moderate diversity, using a mix of models flexibly without extreme focus or spread.",
-    "Sorcerer": "High-diversity miners (entropy > 0.7) who use many different models evenly, encouraging broad exploration and discovery of rare models."
+    "Ranger": "Balanced miners (0.3 < entropy ≤ 0.7) with moderate diversity using a mix of models flexibly without extreme focus or spread.",
+    "Sorcerer": "High-diversity miners (entropy > 0.7) who use many different models encouraging broad exploration and discovery of rare models."
 }
 
 
