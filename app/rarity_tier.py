@@ -20,6 +20,17 @@ class RarityTier(Enum):
             RarityTier.LEGENDARY: 1.9,
             RarityTier.UNIQUE: 3.0
         }
+    
+    # @staticmethod
+    # def get_multipliers():
+    #     """Main Scoring Multipliers - Weighted toward UNIQUE/LEGENDARY for discovery."""
+    #     return {
+    #         RarityTier.COMMON: 1.0,
+    #         RarityTier.MAGIC: 1.02,    # Reduced from 1.05
+    #         RarityTier.RARE: 1.05,     # Reduced from 1.1
+    #         RarityTier.LEGENDARY: 2.5, # Increased from 1.9
+    #         RarityTier.UNIQUE: 4.0     # Increased from 3.0
+    #     }
 
 
     def get_tier_multiplier(tier: 'RarityTier') -> float:
