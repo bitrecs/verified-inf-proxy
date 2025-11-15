@@ -4,12 +4,15 @@ import time
 import json
 import logging
 import hashlib
+import tiktoken
 from datetime import datetime, timezone
 from typing import List
-from app.models import SignedResponse
+from app.models import ChatCompletionRequest, SignedResponse
 from fiber import (
     Keypair
 )
+
+
 
 logger = logging.getLogger("verified")
 
@@ -179,3 +182,24 @@ def iso_to_relative_time(iso_ts: str) -> str:
     except Exception as e:
         logger.error(f"Error converting ISO timestamp {iso_ts}: {e}")
         return iso_ts  # Fallback to original
+    
+
+
+def get_token_count(completion_request: ChatCompletionRequest) -> int:
+    """
+    Get the token count for the prompt in a ChatCompletionRequest.
+    Uses tiktoken for accurate counting, with fallback for unknown models.
+    """
+    try:
+        encoding = tiktoken.encoding_for_model(completion_request.model)
+    except KeyError:
+        # Fallback to cl100k_base (used by GPT-4 and similar) for unknown models like x-ai/grok-4-fast
+        encoding = tiktoken.get_encoding("cl100k_base")
+    
+    # Concatenate message contents as a simple prompt representation
+    prompt_text = " ".join([msg.get("content", "") for msg in completion_request.messages])
+    return len(encoding.encode(prompt_text))
+
+def is_localhost_request(client_ip: str) -> bool:
+    """Check if the request is from localhost (for development/testing bypass)."""
+    return client_ip in ["127.0.0.1", "::1", "localhost"]
