@@ -22,7 +22,8 @@ from app.llm_providers import LLMProvider, LLMProviderStats
 from app.die_engine import DiversityIncentiveEngine
 from app.utils import (
     is_valid_hotkey, load_version_info, 
-    verify_miner_request, verify_time
+    verify_miner_request, verify_time,
+    get_token_count, is_localhost_request
 )
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
@@ -57,6 +58,7 @@ MINER_CLASSES_CACHE = TTLCache(maxsize=10, ttl=900) # 15 minutes
 REQUEST_HASH_HISTORY = TTLCache(maxsize=500_000, ttl=60 * 60 * 24)  # 24 hours
 NONCE_HISTORY = TTLCache(maxsize=1_000_000, ttl=60 * 60 * 72)  # 72 hours
 RARITY_DAYS_BACK = 7 # Days back for rarity report
+MIN_PAYLOAD_TOKEN_SIZE = 2000  # Minimum payload size in tokens
 
 BT_NETWORK = os.environ.get("BT_NETWORK", "finney")
 BT_NETUID = int(os.environ.get("BT_NETUID", 122))
@@ -538,6 +540,7 @@ async def forward_proxy_request(
     request_id = secrets.token_hex(16)
     logger.info(f"Request {request_id} from hotkey: {x_hotkey}, IP: {client_ip}, model: {completion_request.model}")
     st = time.perf_counter()
+    is_local = is_localhost_request(client_ip)
 
     try:
         if not authorization or not authorization.startswith("Bearer "):
@@ -553,7 +556,14 @@ async def forward_proxy_request(
                 logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
                 raise HTTPException(400, "Replay attack detected: Nonce has already been used")
             else:
-                NONCE_HISTORY[x_nonce] = True
+                NONCE_HISTORY[x_nonce] = True       
+       
+        if not is_local:
+            token_count = get_token_count(completion_request)
+            logger.info(f"Request {request_id} payload token count: {token_count} tokens")
+            if token_count < MIN_PAYLOAD_TOKEN_SIZE:
+                logger.error(f"Request {request_id} payload too small: {token_count} tokens (min {MIN_PAYLOAD_TOKEN_SIZE})")
+                raise HTTPException(400, f"Payload too small: {token_count} tokens (minimum {MIN_PAYLOAD_TOKEN_SIZE} required)")
         
         payload_data = json.loads((await request.body()).decode('utf-8'))
         verified = verify_miner_request(
@@ -579,7 +589,7 @@ async def forward_proxy_request(
             logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
             raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
         
-        #check for miner dupe hash
+        #check for miner dupe hash        
         if 1==1:
             miner_request_key = f"{x_hotkey}:{hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()}"
             if miner_request_key in REQUEST_HASH_HISTORY:
