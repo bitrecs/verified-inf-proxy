@@ -24,8 +24,12 @@ class HTMLLog:
             duration = item.get('duration', 'N/A') or 'N/A'
             signature = item.get('signature', 'N/A')
             provider = item.get('provider', 'N/A')
+            prompt_tokens = item.get('prompt_tokens', 0) or 0
+            completion_tokens = item.get('completion_tokens', 0) or 0
+            total_tokens = item.get('total_tokens', 0) or 0
             miners.add(hotkey)
-            
+            token_hint = f"Input: {prompt_tokens}, Output: {completion_tokens}"            
+
             # Parse response_json to extract content
             response_content = 'N/A'
             miner_url = f"https://dashboard.bitrecs.ai/miner?uid={html.escape(hotkey)}"
@@ -64,6 +68,7 @@ class HTMLLog:
             escaped_response_content = html.escape(str(response_content))
             escaped_duration = html.escape(str(duration))
             escaped_signature = html.escape(str(signature))
+            escaped_total_tokens = html.escape(str(total_tokens))
 
             # Append to list instead of concatenating strings
             rows_html_list.append(f"""
@@ -75,6 +80,8 @@ class HTMLLog:
                             <td data-label="{html.escape('Response')}" class="response">{escaped_response_content}</td>
                             <td data-label="{html.escape('Duration')}" class="duration">{escaped_duration}s</td>
                             <td data-label="{html.escape('Signature')}" class="signature">{escaped_signature}</td>
+                            <td data-label="{html.escape('Tokens')}" class="tokens" title="{token_hint}">{escaped_total_tokens}</td>
+                            
                         </tr>
             """)
         
@@ -225,6 +232,11 @@ class HTMLLog:
                 color: #8b949e;
                 max-width: 120px;
                 word-break: break-all;
+            }}
+            .tokens {{
+                font-size: 13px;
+                color: #d2a8ff;
+                white-space: nowrap;
             }}
             
             .finney {{
@@ -391,6 +403,7 @@ class HTMLLog:
                             <th>Response</th>
                             <th>Duration</th>
                             <th>Signature</th>
+                            <th>Tokens</th>
                         </tr>
                     </thead>
                     <tbody>
