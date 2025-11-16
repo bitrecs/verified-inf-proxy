@@ -100,7 +100,7 @@ class DiversityIncentiveEngine:
         
         normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
         if normalized_entropy > 0.7:
-            return MinerClass.SORCERER.value            
+            return MinerClass.WIZARD.value            
         elif normalized_entropy > 0.3:
             return MinerClass.RANGER.value            
         else:
@@ -310,8 +310,8 @@ if __name__ == "__main__":
     novice_info = MinerClass.get_class_info(MinerClass.NOVICE)
     monk_info = MinerClass.get_class_info(MinerClass.MONK)
     ranger_info = MinerClass.get_class_info(MinerClass.RANGER)
-    sorcerer_info = MinerClass.get_class_info(MinerClass.SORCERER)
-    for info in [novice_info, monk_info, ranger_info, sorcerer_info]:
+    wizard_info = MinerClass.get_class_info(MinerClass.WIZARD)
+    for info in [novice_info, monk_info, ranger_info, wizard_info]:
         print(f"{info['icon']} {info['name']} (Color: #{info['color_code']}) - {info['description']}")
         print(f"  Extended: {info['extended_description']}\n")
 
