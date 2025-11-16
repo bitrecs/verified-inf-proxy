@@ -147,8 +147,12 @@ class HTMLStats:
                 gap: 15px;  /* Space between logo and title */
             }}
             .header img {{
-                height: 40px;  /* Adjust logo size as needed */
-                width: auto;
+                height: 20px;       
+                width: 22.5px;      
+                object-fit: contain;
+                background: white;
+                padding: 0px;
+                border-radius: 4px;
             }}
             .stats {{
                 display: flex;
