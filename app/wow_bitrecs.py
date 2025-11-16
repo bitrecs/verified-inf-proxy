@@ -19,7 +19,7 @@ class WorldOfBitrecs:
         """
         # Sample data (replace with actual DieEngine data if needed)
         sample_rarity = RarityTier.UNIQUE
-        sample_class = MinerClass.SORCERER
+        sample_class = MinerClass.WIZARD
 
         engine = DiversityIncentiveEngine()
         since_date = datetime.now(timezone.utc) - timedelta(days=14)

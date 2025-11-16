@@ -5,7 +5,7 @@ CLASS_COLOR_MAPPING = {
     "Novice": "C0C0C0", # Gray    
     "Monk": "D6133A",   # Red
     "Ranger": "3AD613", # Green    
-    "Sorcerer": "133AD6" # Blue
+    "Wizard": "133AD6" # Blue
 }
 
 
@@ -13,21 +13,21 @@ CLASS_ICON_MAPPING = {
     "Novice": "🔰",
     "Monk": "🤛",
     "Ranger": "🏹",
-    "Sorcerer": "⚡️"
+    "Wizard": "⚡️"
 }
 
 MINER_CLASS_DESCRIPTIONS = {
     "Novice": "Novice with <10 proofs",
     "Monk": "Focused miners using few models for consistency.",
     "Ranger": "Balanced miners with moderate model variety.",
-    "Sorcerer": "Diverse miners exploring many models."
+    "Wizard": "Diverse miners exploring many models."
 }
 
 MINER_CLASS_DESCRIPTIONS_EXTENDED = {
     "Novice": "New miners with fewer than 10 proofs, representing new adventurers.",
     "Monk": "Low-diversity miners (entropy ≤ 0.3) who stick mostly to one or few models, rewarding deep focus and consistency.",
     "Ranger": "Balanced miners (0.3 < entropy ≤ 0.7) with moderate diversity using a mix of models flexibly without extreme focus or spread.",
-    "Sorcerer": "High-diversity miners (entropy > 0.7) who use many different models encouraging broad exploration and discovery of rare models."
+    "Wizard": "High-diversity miners (entropy > 0.7) who use many different models encouraging broad exploration and discovery of rare models."
 }
 
 
@@ -36,14 +36,14 @@ class MinerClass(Enum):
     NOVICE = "Novice"
     MONK = "Monk"
     RANGER = "Ranger"
-    SORCERER = "Sorcerer"
+    WIZARD = "Wizard"
 
     @staticmethod
     def classify_miner(entropy: float, total_proofs: int):
         if total_proofs < 10:
             return MinerClass.NOVICE
         elif entropy > 0.6:
-            return MinerClass.SORCERER
+            return MinerClass.WIZARD
         elif entropy > 0.2:
             return MinerClass.RANGER
         else:
