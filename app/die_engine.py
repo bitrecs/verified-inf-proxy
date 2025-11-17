@@ -18,9 +18,6 @@ from app.miner_class import MinerClass
 Diversity Incentive Engine (DIE)
 ----------------------------
 Implements a diversity incentive mechanism to reward miners using rare AI models.
-The incentive is based on the Verified Model Rarity Score (VMRS), which inversely correlates
-with the frequency of model usage among verified proofs.
-
 Model names are normalized by stripping any path/provider prefixes.
 
 params: 
@@ -99,12 +96,12 @@ class DiversityIncentiveEngine:
         max_entropy = math.log2(len(model_counts)) if model_counts else 0
         
         normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
-        if normalized_entropy > 0.7:
-            return MinerClass.WIZARD.value            
-        elif normalized_entropy > 0.3:
-            return MinerClass.RANGER.value            
+        if normalized_entropy > 0.6:
+            return MinerClass.WIZARD.value
+        elif normalized_entropy > 0.2:
+            return MinerClass.RANGER.value
         else:
-            return MinerClass.MONK.value            
+            return MinerClass.MONK.value
    
 
     def get_rarity_bonus(self, model_name: str) -> float:

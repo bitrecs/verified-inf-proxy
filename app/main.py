@@ -13,9 +13,10 @@ import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from cachetools import TTLCache
-from typing import Union, Dict
+from typing import Tuple, Union, Dict
 from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
+from app.product import Product
 from app.html_stats import HTMLStats
 from app.rarity_tier import RarityTier
 from app.llm_providers import LLMProvider, LLMProviderStats
@@ -598,7 +599,15 @@ async def forward_proxy_request(
                 #raise HTTPException(400, "Duplicate request detected")
             else:
                 REQUEST_HASH_HISTORY[miner_request_key] = True    
-                
+        
+        # Check the incoming prompt has a valid catalog of skus
+        catalog_accepted, catalog_size = validate_completion_catalog(completion_request)
+        if not catalog_accepted:
+            logger.error(f"\033[31mRequest {request_id} has too small catalog {catalog_size}\033[0m")
+            raise HTTPException(400, "Invalid context missing catalog")
+        else:
+            logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m")
+        
         # if 1==2:
         #     nonce_exists = d1_client.check_nonce_used(x_nonce)
         #     if nonce_exists:
@@ -767,3 +776,16 @@ async def verify_endpoint(
         }
     
 
+def validate_completion_catalog(request: ChatCompletionRequest) -> Tuple[bool, int]:
+    try:
+        products = Product.extract_products_from_prompt(request, exclude_last_n=3)
+        catalog_size = len(products)
+        if len(products) < 100:
+            return False, catalog_size
+        dupe_percentage = Product.get_dupe_percentage(products)
+        if dupe_percentage > 1:
+            return False, catalog_size
+        return True, catalog_size
+    except Exception as e:
+        logger.error(f"Error validating completion catalog: {str(e)}")
+        return False, 0
