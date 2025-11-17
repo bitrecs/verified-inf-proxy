@@ -140,7 +140,8 @@ class HTMLLog:
                 object-fit: contain;
                 background: white;
                 padding: 0px;
-                border-radius: 4px;
+                border-radius: 0px;
+                zoom: 1.5;
             }}
             .stats {{
                 display: flex;
