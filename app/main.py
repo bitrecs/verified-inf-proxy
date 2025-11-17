@@ -11,6 +11,8 @@ import logging
 import threading
 import tracemalloc
 from dotenv import load_dotenv
+
+from app.product import Product
 load_dotenv()
 from cachetools import TTLCache
 from typing import Union, Dict
@@ -598,7 +600,12 @@ async def forward_proxy_request(
                 #raise HTTPException(400, "Duplicate request detected")
             else:
                 REQUEST_HASH_HISTORY[miner_request_key] = True    
-                
+        
+        # Check the incoming prompt has a valid catalog of skus
+        if not validate_completion_catalog(completion_request):
+            logger.error(f"\033[31mRequest {request_id} has missing catalog skus\033[0m")
+            raise HTTPException(400, "Invalid context missing catalog")
+        
         # if 1==2:
         #     nonce_exists = d1_client.check_nonce_used(x_nonce)
         #     if nonce_exists:
@@ -767,3 +774,15 @@ async def verify_endpoint(
         }
     
 
+def validate_completion_catalog(request: ChatCompletionRequest) -> bool:
+    try:
+        products = Product.extract_products_from_prompt(request, exclude_last_n=3)
+        if len(products) < 100:
+            return False
+        dupe_percentage = Product.get_dupe_percentage(products)
+        if dupe_percentage > 1:
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Error validating completion catalog: {str(e)}")
+        return False
