@@ -46,7 +46,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MIN_ALPHA_STAKE = 10  # Aalpha access
+MIN_ALPHA_STAKE = 0  # Aalpha access
 METAGRAPH_CACHE_DURATION = 900  # 15 minutes
 IS_VERIFIED_CACHE = TTLCache(maxsize=10000, ttl=900)  # 15 minutes
 IS_VERIFIED_HOUR_DELTA = 8  # Look back this many hours for is_verified
@@ -586,8 +586,8 @@ async def forward_proxy_request(
             logger.error(f"Metagraph snapshot is empty for request {request_id}")
             raise HTTPException(503, "Service unavailable: Metagraph data not ready")
         
-        if 1==2: #removed for Rhef request
-            if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
+        if 1==1: #removed for Rhef request
+            if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):
                 logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
                 raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
         
@@ -778,15 +778,33 @@ async def verify_endpoint(
     
 
 def validate_completion_catalog(request: ChatCompletionRequest) -> Tuple[bool, int]:
+    """
+    Validate completion request catalog with minimal memory footprint.
+    Returns (is_valid, catalog_size)
+    """
+    products = None  # Explicit initialization for cleanup
     try:
+        # Extract products
         products = Product.extract_products_from_prompt(request, exclude_last_n=3)
         catalog_size = len(products)
-        if len(products) < 100:
+        
+        # Early exit for small catalogs (saves duplicate check)
+        if catalog_size < 100:
             return False, catalog_size
+        
+        # Check duplicates (this creates a temporary Counter)
         dupe_percentage = Product.get_dupe_percentage(products)
-        if dupe_percentage > 1:
-            return False, catalog_size
-        return True, catalog_size
+        
+        # Validation result
+        is_valid = dupe_percentage <= 1.0
+        
+        return is_valid, catalog_size
+        
     except Exception as e:
         logger.error(f"Error validating completion catalog: {str(e)}")
         return False, 0
+    finally:
+        # Explicit cleanup to help GC
+        if products is not None:
+            products.clear()
+            del products
