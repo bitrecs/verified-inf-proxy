@@ -586,9 +586,10 @@ async def forward_proxy_request(
             logger.error(f"Metagraph snapshot is empty for request {request_id}")
             raise HTTPException(503, "Service unavailable: Metagraph data not ready")
         
-        if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
-            logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
-            raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
+        if 1==2: #removed for Rhef request
+            if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):                
+                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
+                raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
         
         #check for miner dupe hash        
         if 1==1:
