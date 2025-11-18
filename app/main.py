@@ -778,15 +778,33 @@ async def verify_endpoint(
     
 
 def validate_completion_catalog(request: ChatCompletionRequest) -> Tuple[bool, int]:
+    """
+    Validate completion request catalog with minimal memory footprint.
+    Returns (is_valid, catalog_size)
+    """
+    products = None  # Explicit initialization for cleanup
     try:
+        # Extract products
         products = Product.extract_products_from_prompt(request, exclude_last_n=3)
         catalog_size = len(products)
-        if len(products) < 100:
+        
+        # Early exit for small catalogs (saves duplicate check)
+        if catalog_size < 100:
             return False, catalog_size
+        
+        # Check duplicates (this creates a temporary Counter)
         dupe_percentage = Product.get_dupe_percentage(products)
-        if dupe_percentage > 1:
-            return False, catalog_size
-        return True, catalog_size
+        
+        # Validation result
+        is_valid = dupe_percentage <= 1.0
+        
+        return is_valid, catalog_size
+        
     except Exception as e:
         logger.error(f"Error validating completion catalog: {str(e)}")
         return False, 0
+    finally:
+        # Explicit cleanup to help GC
+        if products is not None:
+            products.clear()
+            del products
