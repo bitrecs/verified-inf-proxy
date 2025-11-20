@@ -234,7 +234,7 @@ class LLMProviderStats:
         
         # Return only the table snippet (no full page)
         html_snippet = f"""
-        <h2>Ping Report for {provider}</h2>
+        <h2><b>{provider}</b></h2>
         <table>
             <thead>
                 <tr><th>Metric</th><th>Details</th></tr>
