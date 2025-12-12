@@ -45,7 +45,7 @@ class RarityTier(Enum):
         icons = {
             RarityTier.COMMON: "\033[90m●\033[0m",          # Gray circle
             RarityTier.MAGIC: "\033[34m●\033[0m",        # Blue circle
-            RarityTier.RARE: "\033[35m●\033[0m",            # Purple circle                        
+            RarityTier.RARE: "\033[35m■\033[0m",            # Purple square                        
             RarityTier.LEGENDARY: "\033[38;5;208m♦\033[0m",  # Orange star
             RarityTier.UNIQUE: "\033[1;33m★\033[0m"          # Yellow diamond
         }
@@ -89,7 +89,7 @@ class RarityTier(Enum):
                 symbol = "●"
             elif tier == RarityTier.RARE:
                 color = "purple"
-                symbol = "●"
+                symbol = "■"
             elif tier == RarityTier.LEGENDARY:
                 color = "darkorange"
                 symbol = "♦"
