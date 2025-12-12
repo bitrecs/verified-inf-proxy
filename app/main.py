@@ -73,9 +73,9 @@ PUBLIC_KEY = PRIVATE_KEY.public_key()
 client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
     limits=httpx.Limits(
-        max_connections=50,
-        max_keepalive_connections=10,
-        keepalive_expiry=15.0
+        max_connections=100,
+        max_keepalive_connections=15,
+        keepalive_expiry=20.0
     )
 )
 
