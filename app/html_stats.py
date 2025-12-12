@@ -55,12 +55,13 @@ class HTMLStats:
         rows_html_list = []
         for hotkey, stats in hotkey_stats.items():
             # Compute miner class once per hotkey (moved here)
-            miner_class = die_engine.get_miner_class(hotkey)
+            miner_class, entropy = die_engine.get_miner_class(hotkey)
+            entropy = round(entropy, 8)
             mc = MinerClass(miner_class)
             miner_class_icon = MinerClass.get_class_icon(mc)
             miner_class_color = MinerClass.get_color_code(mc)
             miner_class_description = MinerClass.get_class_description(mc)
-            stats['miner_class'] = f'<span style="color: #{miner_class_color};" title="{miner_class_description}">{miner_class} {miner_class_icon}</span>'
+            stats['miner_class'] = f'<span style="color: #{miner_class_color};" title="{miner_class_description}:{entropy}">{miner_class} {miner_class_icon}</span>'
             
             avg_duration = stats['total_duration'] / stats['total_responses'] if stats['total_responses'] > 0 else 0.0
             providers_str = '<br> '.join(sorted(stats['providers']))
