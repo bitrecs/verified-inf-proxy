@@ -76,16 +76,22 @@ class DiversityIncentiveEngine:
             self.submit_proof(miner_id, normalized_model)
    
     
-    def get_miner_class(self, miner_id: str) -> str:
+    def get_miner_class(self, miner_id: str) -> Tuple[str, float]:
         """
         Derive miner's class based on the entropy of their model usage history.
+
+        Returns:
+        - MinerClass.NOVICE: Fewer than 10 proofs.
+        - MinerClass.MONK: Low diversity (entropy <= 0.2).
+        - MinerClass.RANGER: Moderate diversity (0.2 < entropy <= 0.6).
+        - MinerClass.WIZARD: High diversity (entropy > 0.6).
         """
         miner_proofs = [p for p in self.proofs if p.miner_id == miner_id]
         proof_count = len(miner_proofs)
         
         # Novice: fewer than 10 proofs
         if proof_count < 10:
-            return MinerClass.NOVICE.value
+            return MinerClass.NOVICE.value, -1.0  # Indicate not applicable
         
         model_counts = defaultdict(int)
         for proof in miner_proofs:
@@ -97,11 +103,11 @@ class DiversityIncentiveEngine:
         
         normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
         if normalized_entropy > 0.6:
-            return MinerClass.WIZARD.value
+            return MinerClass.WIZARD.value, normalized_entropy
         elif normalized_entropy > 0.2:
-            return MinerClass.RANGER.value
+            return MinerClass.RANGER.value, normalized_entropy
         else:
-            return MinerClass.MONK.value
+            return MinerClass.MONK.value, normalized_entropy
    
 
     def get_rarity_bonus(self, model_name: str) -> float:
@@ -211,7 +217,7 @@ class DiversityIncentiveEngine:
         dt_from = (datetime.now(timezone.utc) - self.active_date_range).isoformat() if self.active_date_range else "N/A"
         
         for miner_id in all_miners:
-            mclass = self.get_miner_class(miner_id)
+            mclass, entropy = self.get_miner_class(miner_id)
             class_color_code = MinerClass.get_color_code(MinerClass[mclass.upper()])
             class_icon = MinerClass.get_class_icon(MinerClass[mclass.upper()])
 
@@ -220,6 +226,7 @@ class DiversityIncentiveEngine:
                 "class": mclass,
                 "class_icon": class_icon,
                 "class_color": class_color_code,
+                "entropy": entropy,
                 "proofs": len([p for p in self.proofs if p.miner_id == miner_id]),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
