@@ -657,7 +657,9 @@ async def forward_proxy_request(
         
         if response.status_code != 200:
             logger.error(f"Upstream error for request {request_id}: {response.status_code}")
+            logger.error(f"{completion_request.provider}:{completion_request.model}:{x_hotkey}")
             logger.error(f"Response content: {response.text}")
+
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
         request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
