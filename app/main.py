@@ -602,12 +602,13 @@ async def forward_proxy_request(
                 REQUEST_HASH_HISTORY[miner_request_key] = True    
         
         # Check the incoming prompt has a valid catalog of skus
-        catalog_accepted, catalog_size = validate_completion_catalog(completion_request)
-        if not catalog_accepted:
-            logger.error(f"\033[31mRequest {request_id} has too small catalog {catalog_size}\033[0m")
-            raise HTTPException(400, "Invalid context missing catalog")
-        else:
-            logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m")
+        if 1==1:
+            catalog_accepted, catalog_size = validate_completion_catalog(completion_request)
+            if not catalog_accepted:
+                logger.error(f"\033[31mRequest {request_id} has too small catalog {catalog_size}\033[0m")
+                raise HTTPException(400, "Invalid context missing catalog")
+            else:
+                logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m")
         
         # if 1==2:
         #     nonce_exists = d1_client.check_nonce_used(x_nonce)
@@ -644,9 +645,7 @@ async def forward_proxy_request(
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
 
-        payload = completion_request.model_dump(exclude_unset=True)
-        if provider == LLMProvider.CLAUDE:
-            payload = update_claude_payload(payload)
+        payload = completion_request.model_dump(exclude_unset=True)     
         response = await client.post(
             url,
             json=payload,
@@ -810,24 +809,3 @@ def validate_completion_catalog(request: ChatCompletionRequest) -> Tuple[bool, i
         if products is not None:
             products.clear()
             del products
-
-
-def update_claude_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(payload, dict):
-        raise TypeError("Claude payload must be a dict")
-    claude_payload = dict(payload)
-    claude_payload["response_format"] = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "verified_completion",
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "completion": {"type": "string"},
-                    "metadata": {"type": "object"}
-                },
-                "required": ["completion"]
-            }
-        }
-    }
-    return claude_payload
