@@ -13,7 +13,7 @@ import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from cachetools import TTLCache
-from typing import Tuple, Union, Dict
+from typing import Tuple, Union, Dict, Any
 from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
 from app.product import Product
@@ -645,6 +645,8 @@ async def forward_proxy_request(
                 raise HTTPException(400, "Unknown provider")
 
         payload = completion_request.model_dump(exclude_unset=True)
+        if provider == LLMProvider.CLAUDE:
+            payload = update_claude_payload(payload)
         response = await client.post(
             url,
             json=payload,
@@ -808,3 +810,24 @@ def validate_completion_catalog(request: ChatCompletionRequest) -> Tuple[bool, i
         if products is not None:
             products.clear()
             del products
+
+
+def update_claude_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise TypeError("Claude payload must be a dict")
+    claude_payload = dict(payload)
+    claude_payload["response_format"] = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "verified_completion",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "completion": {"type": "string"},
+                    "metadata": {"type": "object"}
+                },
+                "required": ["completion"]
+            }
+        }
+    }
+    return claude_payload
