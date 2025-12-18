@@ -66,11 +66,20 @@ class HTMLStats:
             avg_duration = stats['total_duration'] / stats['total_responses'] if stats['total_responses'] > 0 else 0.0
             providers_str = '<br> '.join(sorted(stats['providers']))
             
-            # Build models_str with cached rarity
-            models_str = ""
+            # Cache rarity for all models in this miner's stats
             for model in stats['models']:
                 if model not in rarity_cache:
                     rarity_cache[model] = die_engine.get_rarity_tier(model)
+            
+            # Define tier order for sorting (common first, then magic, rare, legendary, unique)
+            tier_order = [RarityTier.COMMON, RarityTier.MAGIC, RarityTier.RARE, RarityTier.LEGENDARY, RarityTier.UNIQUE]
+            
+            # Sort models by rarity tier
+            sorted_models = sorted(stats['models'], key=lambda m: tier_order.index(rarity_cache.get(m, RarityTier.COMMON)))
+            
+            # Build models_str with sorted models
+            models_str = ""
+            for model in sorted_models:
                 tier = rarity_cache[model]
                 tier_color = RarityTier.get_html_color(tier)
                 escaped_model = html.escape(model)

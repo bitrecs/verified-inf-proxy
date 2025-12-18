@@ -13,7 +13,7 @@ import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from cachetools import TTLCache
-from typing import Tuple, Union, Dict
+from typing import Tuple, Union, Dict, Any
 from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
 from app.product import Product
@@ -602,12 +602,13 @@ async def forward_proxy_request(
                 REQUEST_HASH_HISTORY[miner_request_key] = True    
         
         # Check the incoming prompt has a valid catalog of skus
-        catalog_accepted, catalog_size = validate_completion_catalog(completion_request)
-        if not catalog_accepted:
-            logger.error(f"\033[31mRequest {request_id} has too small catalog {catalog_size}\033[0m")
-            raise HTTPException(400, "Invalid context missing catalog")
-        else:
-            logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m")
+        if 1==1:
+            catalog_accepted, catalog_size = validate_completion_catalog(completion_request)
+            if not catalog_accepted:
+                logger.error(f"\033[31mRequest {request_id} has too small catalog {catalog_size}\033[0m")
+                raise HTTPException(400, "Invalid context missing catalog")
+            else:
+                logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m")
         
         # if 1==2:
         #     nonce_exists = d1_client.check_nonce_used(x_nonce)
@@ -644,7 +645,7 @@ async def forward_proxy_request(
                 logger.warning(f"Unknown provider for request {request_id}")
                 raise HTTPException(400, "Unknown provider")
 
-        payload = completion_request.model_dump(exclude_unset=True)
+        payload = completion_request.model_dump(exclude_unset=True)     
         response = await client.post(
             url,
             json=payload,
@@ -656,7 +657,9 @@ async def forward_proxy_request(
         
         if response.status_code != 200:
             logger.error(f"Upstream error for request {request_id}: {response.status_code}")
+            logger.error(f"{completion_request.provider}:{completion_request.model}:{x_hotkey}")
             logger.error(f"Response content: {response.text}")
+
             raise HTTPException(status_code=response.status_code, detail=response.text)
         
         request_hash = hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()
