@@ -86,7 +86,6 @@ metagraph_manager = MetagraphSyncManager(
 )
 metagraph_snapshot = {"nodes": {}}
 
-
 async def check_hotkey_stake(
     hotkey: str,
     stake: float
@@ -96,7 +95,19 @@ async def check_hotkey_stake(
     snapshot, _ = metagraph_manager.get_snapshot()
     node = snapshot.get(hotkey)
     logger.info(f"check_hotkey_stake {hotkey} : {node['stake'] if node else 'N/A'}, required {stake}")
-    return node["stake"] > stake if node else False
+    return node["stake"] >= stake if node else False
+
+
+# async def check_hotkey_stake(
+#     hotkey: str,
+#     stake: float
+# ) -> bool:
+#     if hotkey is None or stake is None:
+#         return False
+#     snapshot, _ = metagraph_manager.get_snapshot()
+#     node = snapshot.get(hotkey)
+#     logger.info(f"check_hotkey_stake {hotkey} : {node['stake'] if node else 'N/A'}, required {stake}")
+#     return node["stake"] > stake if node else False
 
 
 async def check_request_ip(
@@ -589,7 +600,8 @@ async def forward_proxy_request(
         if 1==1: #removed for Rhef request
             if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):
                 logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
-                raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
+                #raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
+                raise HTTPException(401, "INVALID REQUEST: HOTKEY NOT FOUND")
         
         #check for miner dupe hash        
         if 1==1:
