@@ -560,12 +560,12 @@ async def forward_proxy_request(
             raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")        
         
         if not verify_time(int(x_timestamp)):
-            logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m")
+            logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m for key {x_hotkey}")
             raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
         
         if 1==1:
             if x_nonce in NONCE_HISTORY:
-                logger.error(f"\033[31mReplay attack detected for request {request_id} with nonce {x_nonce}\033[0m")
+                logger.error(f"\033[31mReplay attack {x_hotkey} for request {request_id} with nonce {x_nonce}\033[0m")
                 raise HTTPException(400, "Replay attack detected: Nonce has already been used")
             else:
                 NONCE_HISTORY[x_nonce] = True       
@@ -574,7 +574,7 @@ async def forward_proxy_request(
             token_count = get_token_count(completion_request)
             logger.info(f"Request {request_id} payload token count: {token_count} tokens")
             if token_count < MIN_PAYLOAD_TOKEN_SIZE:
-                logger.error(f"Request {request_id} payload too small: {token_count} tokens (min {MIN_PAYLOAD_TOKEN_SIZE})")
+                logger.error(f"Request {request_id} payload too small: {token_count} tokens (min {MIN_PAYLOAD_TOKEN_SIZE}) for hotkey {x_hotkey}")
                 raise HTTPException(400, f"Payload too small: {token_count} tokens (minimum {MIN_PAYLOAD_TOKEN_SIZE} required)")
         
         payload_data = json.loads((await request.body()).decode('utf-8'))
@@ -617,10 +617,10 @@ async def forward_proxy_request(
         if 1==1:
             catalog_accepted, catalog_size = validate_completion_catalog(completion_request)
             if not catalog_accepted:
-                logger.error(f"\033[31mRequest {request_id} has too small catalog {catalog_size}\033[0m")
+                logger.error(f"\033[31mRequest {request_id} has too small catalog {catalog_size}\033[0m from hotkey {x_hotkey}")
                 raise HTTPException(400, "Invalid context missing catalog")
             else:
-                logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m")
+                logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m from hotkey {x_hotkey}")
         
         # if 1==2:
         #     nonce_exists = d1_client.check_nonce_used(x_nonce)
