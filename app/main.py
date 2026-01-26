@@ -555,6 +555,10 @@ async def forward_proxy_request(
     is_local = is_localhost_request(client_ip)
 
     try:
+        if 1==1:
+            #disable fored for now
+            return JSONResponse(status_code=503, content={"error": "Verified Inference is disabled"})
+
         if not authorization or not authorization.startswith("Bearer "):
             logger.error(f"Request {request_id} missing or invalid Authorization header")
             raise HTTPException(401, "MISSING OR INVALID AUTHORIZATION HEADER")        
