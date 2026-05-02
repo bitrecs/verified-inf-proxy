@@ -13,7 +13,7 @@ import tracemalloc
 from dotenv import load_dotenv
 load_dotenv()
 from cachetools import TTLCache
-from typing import Tuple, Union, Dict, Any
+from typing import Tuple, Union, Dict
 from app.pg_helper import PGHandler
 from app.html_log import HTMLLog
 from app.product import Product
@@ -98,18 +98,6 @@ async def check_hotkey_stake(
     return node["stake"] >= stake if node else False
 
 
-# async def check_hotkey_stake(
-#     hotkey: str,
-#     stake: float
-# ) -> bool:
-#     if hotkey is None or stake is None:
-#         return False
-#     snapshot, _ = metagraph_manager.get_snapshot()
-#     node = snapshot.get(hotkey)
-#     logger.info(f"check_hotkey_stake {hotkey} : {node['stake'] if node else 'N/A'}, required {stake}")
-#     return node["stake"] > stake if node else False
-
-
 async def check_request_ip(
     hotkey: str,
     request_ip: str,
@@ -150,7 +138,7 @@ async def refresh_provider_pings():
             logger.info(f"Provider pings cache updated: {len(output)} characters")            
         except Exception as e:
             logger.error(f"Error refreshing provider pings: {e}")
-        await asyncio.sleep(1800)  # Refresh every 30 minutes
+        await asyncio.sleep(1800)
 
 
 def save_request_data(
@@ -200,9 +188,7 @@ async def lifespan(app: FastAPI):
     app.state.last_updated = None
     app.state.total_requests = 0
     app.state.exceptions = 0
-    app.state.dei_engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=3.0)
-    # since_date = datetime.now(timezone.utc) - timedelta(days=RARITY_DAYS_BACK)
-    # app.state.dei_engine.load_proofs_from_db(since_date)
+    app.state.dei_engine = DiversityIncentiveEngine(beta=1.5, max_multiplier=3.0)    
     metagraph_manager.start()
     
     # Background task to restart manager if dead
@@ -599,19 +585,17 @@ async def forward_proxy_request(
         
         if 1==1: #removed for Rhef request
             if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):
-                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")
-                #raise HTTPException(401, f"INVALID REQUEST: INSUFFICIENT STAKE - min {MIN_ALPHA_STAKE}")
+                logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")                
                 raise HTTPException(401, "INVALID REQUEST: HOTKEY NOT FOUND")
         
         #check for miner dupe hash        
         if 1==1:
             miner_request_key = f"{x_hotkey}:{hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()}"
             if miner_request_key in REQUEST_HASH_HISTORY:
-                #logger.warning(f"\033[33mDuplicate request detected for request {request_id} with hash {miner_request_key}\033[0m")
                 logger.warning(f"\033[31mRequest {request_id} is a duplicate and will be rejected.\033[0m")
-                #raise HTTPException(400, "Duplicate request detected")
+                raise HTTPException(400, "Duplicate request detected")
             else:
-                REQUEST_HASH_HISTORY[miner_request_key] = True    
+                REQUEST_HASH_HISTORY[miner_request_key] = True
         
         # Check the incoming prompt has a valid catalog of skus
         if 1==1:
