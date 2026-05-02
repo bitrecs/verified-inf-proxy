@@ -2,7 +2,7 @@
 
 Trust but verify.
 
-A simple FastAPI proxy for chat/completitons with ed25519 signing
+A simple FastAPI proxy for chat/completitons with ed25519 signing and Bittensor metagraph integration
 
 Miners can opt-in and proxy their LLM requests through a verifier, which will forward their request to the defined provider and respond back with a signed response + proof.
 The response with proof is submitted to the querying Validator who can independently verify the proof and adjust rewards if applicable.
@@ -21,9 +21,7 @@ The response with proof is submitted to the querying Validator who can independe
 ### `.env` (server)
 ```
 B64_PRIVATE_KEY=ed25519 key
-CF_ACCOUNT_ID=cloudflare account
-CF_D1_TOKEN=cloudflare token
-CF_D1_DATABASE_ID=cloudflare database
+DATABASE_URL=postgres db
 ```
 
 ### `/tests/.env` (testing)

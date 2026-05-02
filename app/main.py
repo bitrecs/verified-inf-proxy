@@ -547,14 +547,13 @@ async def forward_proxy_request(
         
         if not verify_time(int(x_timestamp)):
             logger.error(f"\033[31mRequest {request_id} failed timestamp verification: {x_timestamp} \033[0m for key {x_hotkey}")
-            raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")
-        
-        if 1==1:
-            if x_nonce in NONCE_HISTORY:
-                logger.error(f"\033[31mReplay attack {x_hotkey} for request {request_id} with nonce {x_nonce}\033[0m")
-                raise HTTPException(400, "Replay attack detected: Nonce has already been used")
-            else:
-                NONCE_HISTORY[x_nonce] = True       
+            raise HTTPException(401, "INVALID REQUEST: TIMESTAMP VERIFICATION FAILED")        
+    
+        if x_nonce in NONCE_HISTORY:
+            logger.error(f"\033[31mReplay attack {x_hotkey} for request {request_id} with nonce {x_nonce}\033[0m")
+            raise HTTPException(400, "Replay attack detected: Nonce has already been used")
+        else:
+            NONCE_HISTORY[x_nonce] = True
        
         if not is_local:
             token_count = get_token_count(completion_request)
@@ -583,12 +582,13 @@ async def forward_proxy_request(
             logger.error(f"Metagraph snapshot is empty for request {request_id}")
             raise HTTPException(503, "Service unavailable: Metagraph data not ready")
         
-        if 1==1: #removed for Rhef request
+        #screen miners for stake
+        if 1==1:
             if not await check_hotkey_stake(x_hotkey, MIN_ALPHA_STAKE):
                 logger.warning(f"\033[31mHotkey {x_hotkey} does not have sufficient stake ({MIN_ALPHA_STAKE}) in the metagraph for request {request_id} \033[0m")                
                 raise HTTPException(401, "INVALID REQUEST: HOTKEY NOT FOUND")
         
-        #check for miner dupe hash        
+        #check for miner dupe hash
         if 1==1:
             miner_request_key = f"{x_hotkey}:{hashlib.sha256(json.dumps(completion_request.model_dump(), sort_keys=True).encode()).hexdigest()}"
             if miner_request_key in REQUEST_HASH_HISTORY:
@@ -605,13 +605,8 @@ async def forward_proxy_request(
                 raise HTTPException(400, "Invalid context missing catalog")
             else:
                 logger.info(f"\033[32mRequest {request_id} catalog size: {catalog_size} skus\033[0m from hotkey {x_hotkey}")
-        
-        # if 1==2:
-        #     nonce_exists = d1_client.check_nonce_used(x_nonce)
-        #     if nonce_exists:
-        #         logger.error(f"\033[31mReplay attack detected in D1 for request {request_id} with nonce {x_nonce}\033[0m")
-        #         raise HTTPException(400, "Replay attack detected: Nonce has already been used")
-  
+                        
+    
         provider = LLMProvider.from_str(x_provider)
         match provider:
             case LLMProvider.CHAT_GPT:
