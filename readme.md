@@ -1,6 +1,20 @@
-# Bitrecs Verified Inference Proxy
+# Verified 🤝 Inference
+
+Trust but verify.
 
 A simple FastAPI proxy for chat/completitons with ed25519 signing
+
+Miners can opt-in and proxy their LLM requests through a verifier, which will forward their request to the defined provider and respond back with a signed response + proof.
+The response with proof is submitted to the querying Validator who can independently verify the proof and adjust rewards if applicable.
+
+## Trusted Inference
+
+<img src="verified_inference.png" alt="Verified Inference" style="border: solid 1px #4d5351; padding: 2" title="Verified Inference"/>
+
+## Known Limitations
+
+- local miners are excluded from this implementation 
+- ed25519 keys are ephemeral
 
 ## Configure Environment
 
