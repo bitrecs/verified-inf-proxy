@@ -53,3 +53,6 @@ Server runs on `http://127.0.0.1:8000`
 * `GET /is_verified` - miner verified lookup
 * `POST /v1/chat/completions` - Proxy endpoint
 
+## License
+
+MIT
